@@ -1,0 +1,77 @@
+/* Fundo geral */
+body {
+  background: #f7f8fb;
+  font-family: Arial, sans-serif;
+  color: #333;
+  margin: 0;
+  padding: 0;
+}
+
+/* Calendário */
+#calendar {
+  max-width: 900px;
+  margin: 0 auto 40px auto;
+  background: #fff;
+  padding: 15px;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+/* Botões do calendário e seleção de datas em laranja */
+.fc .fc-button, 
+.fc .fc-button:hover,
+.fc .fc-button-primary {
+  background-color: #db6605;
+  border-color: #db6605;
+  color: #fff;
+  font-weight: 600;
+}
+
+.fc .fc-button-primary:hover {
+  background-color: #914303;
+  border-color: #914303;
+}
+
+.fc .fc-col-header-cell-cushion {
+  color: #db6605;
+  font-weight: 600;
+}
+
+/* Botões Laranja gerais */
+.btn-orange {
+  background-color: #db6605;
+  border-color: #db6605;
+  color: #fff;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.btn-orange:hover {
+  background-color: #914303;
+  border-color: #914303;
+}
+
+/* Títulos */
+h2, h3 {
+  font-weight: 600;
+}
+
+/* Formulário de reserva */
+form {
+  background: #fff;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+}
+
+/* Labels */
+.form-label {
+  font-weight: 500;
+}
+
+/* Ajuste responsivo do calendário */
+@media (max-width: 991px) {
+  #calendar {
+    margin-bottom: 30px;
+  }
+}
