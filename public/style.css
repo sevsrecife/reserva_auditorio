@@ -54,6 +54,7 @@ body {
 /* Títulos */
 h2, h3 {
   font-weight: 600;
+  text-align: center;
 }
 
 /* Formulário de reserva */
@@ -73,5 +74,48 @@ form {
 @media (max-width: 991px) {
   #calendar {
     margin-bottom: 30px;
+  }
+}
+
+/* Ajustes para smartphone */
+@media (max-width: 768px) {
+  /* Calendário ocupa toda a largura */
+  #calendar {
+    width: 100%;
+    padding: 10px;
+    font-size: 0.85rem;
+  }
+
+  /* Títulos menores */
+  h2, h3 {
+    font-size: 1.4rem;
+  }
+
+  /* Formulário: colunas empilhadas */
+  .row > .col-md-6 {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+
+  /* Inputs e selects menores */
+  .form-control, .form-select {
+    font-size: 0.9rem;
+    padding: 6px 8px;
+  }
+
+  /* Botões menores e centralizados */
+  .btn-orange {
+    font-size: 0.9rem;
+    padding: 8px 10px;
+    width: 100%;
+    margin-bottom: 10px;
+  }
+
+  /* Área de login/logout */
+  #user-info {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
   }
 }
