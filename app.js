@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
-import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, Timestamp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js";
+import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, Timestamp, getDocs, query, where } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js";
 
 
@@ -26,7 +26,7 @@ const reservaForm = document.getElementById("reservaForm");
 const userNameSpan = document.getElementById("userName");
 
 // Estado do usuário
-let usuarioLogado = null; // Objeto de usuário do Firebase
+let usuarioLogado = null;
 let usuarioId = null;
 
 // Listeners de autenticação
@@ -95,16 +95,23 @@ Início: ${r.start.toLocaleString()}
 Fim: ${r.end.toLocaleString()}
             `;
             if (usuarioId && r.extendedProps.usuarioId === usuarioId) {
-                if (confirm(`${detalhes}\n\nDeseja excluir sua reserva?`)) {
+                document.getElementById('modal-reserva-detalhes').textContent = detalhes;
+                
+                const confirmDeleteModal = new bootstrap.Modal(document.getElementById('confirmDeleteModal'));
+                confirmDeleteModal.show();
+
+                const confirmBtn = document.getElementById('confirmDeleteBtn');
+                confirmBtn.onclick = () => {
                     deleteDoc(doc(db, "reservas", r.id))
                         .then(() => {
                             alert("Reserva excluída com sucesso!");
+                            confirmDeleteModal.hide();
                         })
                         .catch((error) => {
                             console.error("Erro ao excluir reserva:", error);
                             alert("Falha ao excluir a reserva.");
                         });
-                }
+                };
             } else {
                 alert(detalhes);
             }
@@ -136,7 +143,7 @@ Fim: ${r.end.toLocaleString()}
     });
 
     // Submissão do formulário de reserva
-    reservaForm.addEventListener("submit", (e) => {
+    reservaForm.addEventListener("submit", async (e) => {
         e.preventDefault();
 
         if (!usuarioId) {
@@ -151,6 +158,34 @@ Fim: ${r.end.toLocaleString()}
 
         const inicio = new Date(`${dataInicio}T${inicioHora}:00`);
         const fim = new Date(`${dataFim}T${fimHora}:00`);
+        
+        // Verifica se a data de fim é anterior ou igual à data de início
+        if (fim <= inicio) {
+            alert("Falha na reserva: a data e/ou hora de término deve ser posterior à de início.");
+            return;
+        }
+
+        // Nova lógica de verificação:
+        // Passo 1: Busca todas as reservas existentes.
+        const reservasRef = collection(db, "reservas");
+        const querySnapshot = await getDocs(reservasRef);
+        
+        let haConflito = false;
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            const reservaExistenteInicio = data.inicio.toDate();
+            const reservaExistenteFim = data.fim.toDate();
+            
+            // Passo 2: Verifica a sobreposição localmente.
+            if (inicio < reservaExistenteFim && fim > reservaExistenteInicio) {
+                haConflito = true;
+            }
+        });
+
+        if (haConflito) {
+            alert("Falha ao criar a reserva.\nO auditório já está reservado no período e dia solicitados. Por favor, escolha outro horário.");
+            return;
+        }
 
         const novaReserva = {
             usuarioId: usuarioId,
@@ -174,7 +209,7 @@ Fim: ${r.end.toLocaleString()}
             });
     });
 
-    // Funções de horários (mantidas)
+    // Funções de horários
     function gerarHorarios() {
         let horarios = [];
         for (let h = 8; h < 17; h++) {

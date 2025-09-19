@@ -70,6 +70,12 @@ form {
   font-weight: 500;
 }
 
+/* Ajuste para evitar barra de rolagem em modais de pop-up */
+.modal-body {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
 /* Ajuste responsivo do calendário */
 @media (max-width: 991px) {
   #calendar {
@@ -117,11 +123,5 @@ form {
     flex-direction: column;
     gap: 10px;
     align-items: center;
-  }
-
-  /* Ajuste para evitar barra de rolagem em modais de pop-up */
-  .modal-body {
-  max-height: 70vh; /* Ou um valor fixo em pixels, como 400px */
-  overflow-y: auto;
   }
 }
