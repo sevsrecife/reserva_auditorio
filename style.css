@@ -118,4 +118,10 @@ form {
     gap: 10px;
     align-items: center;
   }
+
+  /* Ajuste para evitar barra de rolagem em modais de pop-up */
+  .modal-body {
+  max-height: 70vh; /* Ou um valor fixo em pixels, como 400px */
+  overflow-y: auto;
+  }
 }
