@@ -1,7 +1,11 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
-import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, Timestamp, getDocs, query, where } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js";
+import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, Timestamp, getDocs } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js";
 
+// ==========================================
+// CONFIGURAÇÃO DO ADMINISTRADOR
+// ==========================================
+const EMAIL_ADMIN = "cpazzola.sevsrecife@gmail.com"; 
 
 // Configurações do Firebase
 const firebaseConfig = {
@@ -24,6 +28,10 @@ const loginBtn = document.getElementById("loginBtn");
 const logoutBtn = document.getElementById("logoutBtn");
 const reservaForm = document.getElementById("reservaForm");
 const userNameSpan = document.getElementById("userName");
+
+// Referências DOM da Recorrência
+const divRecorrencia = document.getElementById("divRecorrencia");
+const checkRecorrencia = document.getElementById("repetirSemanal");
 
 // Estado do usuário
 let usuarioLogado = null;
@@ -49,19 +57,38 @@ logoutBtn.addEventListener("click", () => {
     });
 });
 
+// Listener de mudança de estado (Login/Logout)
 onAuthStateChanged(auth, (user) => {
     if (user) {
         usuarioLogado = user;
         usuarioId = user.uid;
+        
         loginBtn.classList.add("d-none");
         logoutBtn.classList.remove("d-none");
         userNameSpan.textContent = `Olá, ${user.displayName}!`;
+
+        // LÓGICA DE PERMISSÃO DE ADMIN
+        if (user.email === EMAIL_ADMIN) {
+            // Se for o admin, mostra a opção de recorrência
+            if(divRecorrencia) divRecorrencia.classList.remove("d-none");
+        } else {
+            // Se não for admin, garante que está oculto e desmarcado
+            if(divRecorrencia) divRecorrencia.classList.add("d-none");
+            if(checkRecorrencia) checkRecorrencia.checked = false;
+        }
+
     } else {
+        // Usuário deslogado
         usuarioLogado = null;
         usuarioId = null;
+        
         loginBtn.classList.remove("d-none");
         logoutBtn.classList.add("d-none");
         userNameSpan.textContent = '';
+        
+        // Garante que a opção de recorrência suma ao deslogar
+        if(divRecorrencia) divRecorrencia.classList.add("d-none");
+        if(checkRecorrencia) checkRecorrencia.checked = false;
     }
 });
 
@@ -94,14 +121,24 @@ E-mail: ${r.extendedProps.email}
 Início: ${r.start.toLocaleString()}
 Fim: ${r.end.toLocaleString()}
             `;
-            if (usuarioId && r.extendedProps.usuarioId === usuarioId) {
+            
+            // Permite exclusão se for dono da reserva OU se for o ADMIN
+            const isDono = usuarioId && r.extendedProps.usuarioId === usuarioId;
+            const isAdmin = auth.currentUser && auth.currentUser.email === EMAIL_ADMIN;
+
+            if (isDono || isAdmin) {
                 document.getElementById('modal-reserva-detalhes').textContent = detalhes;
                 
                 const confirmDeleteModal = new bootstrap.Modal(document.getElementById('confirmDeleteModal'));
                 confirmDeleteModal.show();
 
                 const confirmBtn = document.getElementById('confirmDeleteBtn');
-                confirmBtn.onclick = () => {
+                
+                // Clone para remover listeners antigos
+                const novoConfirmBtn = confirmBtn.cloneNode(true);
+                confirmBtn.parentNode.replaceChild(novoConfirmBtn, confirmBtn);
+
+                novoConfirmBtn.onclick = () => {
                     deleteDoc(doc(db, "reservas", r.id))
                         .then(() => {
                             alert("Reserva excluída com sucesso!");
@@ -142,7 +179,9 @@ Fim: ${r.end.toLocaleString()}
         calendar.addEventSource(reservas);
     });
 
-    // Submissão do formulário de reserva
+    // -------------------------------------------------------------
+    // SUBMISSÃO DO FORMULÁRIO
+    // -------------------------------------------------------------
     reservaForm.addEventListener("submit", async (e) => {
         e.preventDefault();
 
@@ -151,65 +190,127 @@ Fim: ${r.end.toLocaleString()}
             return;
         }
 
-        const dataInicio = document.getElementById("dataInicio").value;
-        const dataFim = document.getElementById("dataFim").value;
+        const dataInicioVal = document.getElementById("dataInicio").value;
+        const dataFimVal = document.getElementById("dataFim").value;
         const inicioHora = document.getElementById("inicio").value;
         const fimHora = document.getElementById("fim").value;
-
-        const inicio = new Date(`${dataInicio}T${inicioHora}:00`);
-        const fim = new Date(`${dataFim}T${fimHora}:00`);
         
-        // Verifica se a data de fim é anterior ou igual à data de início
-        if (fim <= inicio) {
-            alert("Falha na reserva: a data e/ou hora de término deve ser posterior à de início.");
+        // Verifica checkbox, mas aplica filtro de segurança
+        let isRecorrente = document.getElementById("repetirSemanal").checked;
+        
+        // SEGURANÇA EXTRA: Se não for admin, força false na recorrência
+        if (auth.currentUser.email !== EMAIL_ADMIN) {
+            isRecorrente = false;
+        }
+
+        // Criação de datas corrigindo timezone local
+        const [anoI, mesI, diaI] = dataInicioVal.split('-').map(Number);
+        const [anoF, mesF, diaF] = dataFimVal.split('-').map(Number);
+        
+        const dataInicioObj = new Date(anoI, mesI - 1, diaI);
+        const dataFimObj = new Date(anoF, mesF - 1, diaF);
+
+        if (dataFimObj < dataInicioObj) {
+            alert("A Data Limite deve ser igual ou posterior à Data de Início.");
             return;
         }
 
-        // Nova lógica de verificação:
-        // Passo 1: Busca todas as reservas existentes.
-        const reservasRef = collection(db, "reservas");
-        const querySnapshot = await getDocs(reservasRef);
-        
-        let haConflito = false;
-        querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            const reservaExistenteInicio = data.inicio.toDate();
-            const reservaExistenteFim = data.fim.toDate();
-            
-            // Passo 2: Verifica a sobreposição localmente.
-            if (inicio < reservaExistenteFim && fim > reservaExistenteInicio) {
-                haConflito = true;
-            }
-        });
-
-        if (haConflito) {
-            alert("Falha ao criar a reserva.\nO auditório já está reservado no período e dia solicitados. Por favor, escolha outro horário.");
-            return;
-        }
-
-        const novaReserva = {
+        const dadosBase = {
             usuarioId: usuarioId,
             nome: document.getElementById("nome").value,
             setor: document.getElementById("setor").value,
             telefone: document.getElementById("telefone").value,
             email: document.getElementById("email").value,
             descricao: document.getElementById("descricao").value,
-            inicio: Timestamp.fromDate(inicio),
-            fim: Timestamp.fromDate(fim)
         };
 
-        addDoc(collection(db, "reservas"), novaReserva)
-            .then(() => {
-                alert("Reserva criada com sucesso!");
-                reservaForm.reset();
-            })
-            .catch((error) => {
-                console.error("Erro ao adicionar reserva:", error);
-                alert("Falha ao criar a reserva.");
+        // 1. GERAR LISTA DE RESERVAS
+        let reservasParaCriar = [];
+        let cursorData = new Date(dataInicioObj);
+        
+        // Se for recorrente (e for admin), vai até dataFim. Se não, executa só uma vez.
+        const dataLimiteLoop = isRecorrente ? dataFimObj : dataInicioObj;
+
+        while (cursorData <= dataLimiteLoop) {
+            const ano = cursorData.getFullYear();
+            const mes = String(cursorData.getMonth() + 1).padStart(2, '0');
+            const dia = String(cursorData.getDate()).padStart(2, '0');
+            const dataISO = `${ano}-${mes}-${dia}`;
+
+            const inicioEvento = new Date(`${dataISO}T${inicioHora}:00`);
+            const fimEvento = new Date(`${dataISO}T${fimHora}:00`);
+
+            if (fimEvento <= inicioEvento) {
+                alert("Hora final deve ser maior que a hora inicial.");
+                return;
+            }
+
+            reservasParaCriar.push({
+                ...dadosBase,
+                inicio: inicioEvento,
+                fim: fimEvento
             });
+
+            if (isRecorrente) {
+                cursorData.setDate(cursorData.getDate() + 7);
+            } else {
+                break; // Encerra o loop após a primeira se não for recorrente
+            }
+        }
+
+        if (reservasParaCriar.length === 0) {
+            alert("Nenhuma data válida gerada.");
+            return;
+        }
+
+        // 2. VERIFICAÇÃO DE CONFLITOS
+        const reservasRef = collection(db, "reservas");
+        const snapshot = await getDocs(reservasRef);
+        
+        let conflitos = [];
+
+        reservasParaCriar.forEach((novaReserva) => {
+            snapshot.forEach((docExistente) => {
+                const dadosExistente = docExistente.data();
+                const existInicio = dadosExistente.inicio.toDate();
+                const existFim = dadosExistente.fim.toDate();
+
+                if (novaReserva.inicio < existFim && novaReserva.fim > existInicio) {
+                    const diaConflito = novaReserva.inicio.toLocaleDateString('pt-BR');
+                    const horaConflito = `${novaReserva.inicio.toLocaleTimeString()} às ${novaReserva.fim.toLocaleTimeString()}`;
+                    conflitos.push(`${diaConflito} (${horaConflito})`);
+                }
+            });
+        });
+
+        if (conflitos.length > 0) {
+            alert("Não foi possível realizar a reserva. Há conflitos nas seguintes datas:\n\n" + conflitos.join("\n") + "\n\nPor favor, escolha outro horário.");
+            return;
+        }
+
+        // 3. SALVAR NO FIREBASE
+        try {
+            const promessas = reservasParaCriar.map(reserva => {
+                return addDoc(collection(db, "reservas"), {
+                    ...reserva,
+                    inicio: Timestamp.fromDate(reserva.inicio),
+                    fim: Timestamp.fromDate(reserva.fim)
+                });
+            });
+
+            await Promise.all(promessas);
+            
+            alert(`Sucesso! ${reservasParaCriar.length} reserva(s) criada(s).`);
+            reservaForm.reset();
+            if(checkRecorrencia) checkRecorrencia.checked = false;
+
+        } catch (error) {
+            console.error("Erro ao salvar:", error);
+            alert("Erro ao criar reservas. Tente novamente.");
+        }
     });
 
-    // Funções de horários
+    // Função de preenchimento de horários (mantida igual)
     function gerarHorarios() {
         let horarios = [];
         for (let h = 8; h < 17; h++) {
@@ -240,16 +341,23 @@ Fim: ${r.end.toLocaleString()}
                 return;
             }
 
-            inicioSel.innerHTML = '';
-            fimSel.innerHTML = '';
-            horarios.forEach(h => {
+            if (inicioSel.options.length === 0) {
+                horarios.forEach(h => {
+                    inicioSel.innerHTML += `<option value="${h}">${h}</option>`;
+                    fimSel.innerHTML += `<option value="${h}">${h}</option>`;
+                });
+            }
+        }
+
+        document.getElementById("dataInicio").addEventListener("change", atualizar);
+        
+        // Popula inicialmente
+        if (inicioSel.innerHTML === '') {
+             horarios.forEach(h => {
                 inicioSel.innerHTML += `<option value="${h}">${h}</option>`;
                 fimSel.innerHTML += `<option value="${h}">${h}</option>`;
             });
         }
-
-        document.getElementById("dataInicio").addEventListener("change", atualizar);
-        atualizar();
     }
     preencherHorarios();
 });
