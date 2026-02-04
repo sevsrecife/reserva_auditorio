@@ -6,9 +6,7 @@
   <title>Reserva de Auditório - SEVS</title>
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
-
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -23,7 +21,6 @@
 
   <div class="container mb-5">
     <div id="calendar" class="mb-5"></div>
-
     
     <section>
       <h3 class="text-center mb-4">Nova Reserva - Auditório</h3>
@@ -57,22 +54,30 @@
 
         <div class="row">
           <div class="col-md-6 mb-3">
-            <label for="dataInicio" class="form-label">Data de Início da Reserva</label>
+            <label for="dataInicio" class="form-label">Data da Reserva (Início)</label>
             <input type="date" class="form-control" id="dataInicio" required>
           </div>
           <div class="col-md-6 mb-3">
-            <label for="dataFim" class="form-label">Data de Fim da Reserva</label>
+            <label for="dataFim" class="form-label">Data Limite (Para repetição)</label>
             <input type="date" class="form-control" id="dataFim" required>
+            <div class="form-text">Se não for recorrente, preencha igual à data de início.</div>
           </div>
+        </div>
+
+        <div class="mb-3 form-check d-none" id="divRecorrencia">
+            <input type="checkbox" class="form-check-input" id="repetirSemanal">
+            <label class="form-check-label" for="repetirSemanal">
+              <strong>Repetir semanalmente</strong> (Cria reservas toda semana até a data limite)
+            </label>
         </div>
 
         <div class="row">
           <div class="col-md-6 mb-3">
-            <label for="inicio" class="form-label">Hora de Início da Reserva</label>
+            <label for="inicio" class="form-label">Hora de Início</label>
             <select class="form-select" id="inicio" required></select>
           </div>
           <div class="col-md-6 mb-3">
-            <label for="fim" class="form-label">Hora de Fim da Reserva</label>
+            <label for="fim" class="form-label">Hora de Fim</label>
             <select class="form-select" id="fim" required></select>
           </div>
         </div>
@@ -105,7 +110,9 @@
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js"></script>
+  
   <script type="module" src="app.js"></script>
+  
   <footer class="bg-body-tertiary text-center py-2 mt-4">
     <div class="text-center" style="background-color: rgba(0, 0, 0, 0.05);">
       Desenvolvido por: Núcleo de Transformação Digital (NTD) / SEVS RECIFE
