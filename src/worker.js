@@ -21,7 +21,14 @@ export default {
     }
 
     if (url.pathname.startsWith("/api/")) {
-      return handleApi(request, env, url);
+      try {
+        return await handleApi(request, env, url);
+      } catch (error) {
+        console.error("Unhandled API error:", error);
+        const origin = request.headers.get("Origin");
+        const cors = buildCorsHeaders(origin, env);
+        return jsonError("Erro interno no servidor.", 500, cors);
+      }
     }
 
     if (env.ASSETS) {
@@ -1322,7 +1329,12 @@ function timingSafeEqual(a, b) {
 }
 
 async function validateGoogleIdToken(idToken, expectedClientId) {
-  const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
+  let response;
+  try {
+    response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
+  } catch {
+    return null;
+  }
   if (!response.ok) {
     return null;
   }
