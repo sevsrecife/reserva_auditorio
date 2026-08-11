@@ -1,127 +1,163 @@
-/* Fundo geral */
+:root {
+  --brand: #db6605;
+  --brand-dark: #9d4a03;
+  --surface: #ffffff;
+  --page-bg: #f5f7fb;
+  --ink: #223041;
+}
+
+html, body {
+  background: var(--page-bg);
+  color: var(--ink);
+}
+
 body {
-  background: #f7f8fb;
   font-family: Arial, sans-serif;
-  color: #333;
-  margin: 0;
-  padding: 0;
 }
 
-/* Calendário */
-#calendar {
-  max-width: 900px;
-  margin: 0 auto 40px auto;
-  background: #fff;
-  padding: 15px;
-  border-radius: 10px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+.site-header {
+  background: linear-gradient(180deg, #fff 0%, #fff7ef 100%);
 }
 
-/* Botões do calendário e seleção de datas em laranja */
-.fc .fc-button, 
-.fc .fc-button:hover,
-.fc .fc-button-primary {
-  background-color: #db6605;
-  border-color: #db6605;
+.site-footer {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--brand);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.auth-box,
+.section-card {
+  background: var(--surface);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  box-shadow: 0 8px 22px rgba(20, 33, 61, 0.08);
+}
+
+.section-card-header {
+  border-bottom: 1px solid rgba(34, 48, 65, 0.08);
+  padding-bottom: 0.75rem;
+}
+
+.btn-orange {
+  background: var(--brand);
+  border-color: var(--brand);
   color: #fff;
-  font-weight: 600;
+  font-weight: 700;
 }
 
-.fc .fc-button-primary:hover {
-  background-color: #914303;
-  border-color: #914303;
+.btn-orange:hover,
+.btn-orange:focus {
+  background: var(--brand-dark);
+  border-color: var(--brand-dark);
+  color: #fff;
+}
+
+.form-control,
+.form-select {
+  min-height: 48px;
+}
+
+#calendar {
+  background: #fff;
+  border-radius: 1rem;
+  padding: 1rem;
+  box-shadow: 0 8px 22px rgba(20, 33, 61, 0.08);
+}
+
+.fc .fc-button-primary {
+  background-color: var(--brand);
+  border-color: var(--brand);
+}
+
+.fc .fc-button-primary:hover,
+.fc .fc-button-primary:focus {
+  background-color: var(--brand-dark);
+  border-color: var(--brand-dark);
 }
 
 .fc .fc-col-header-cell-cushion {
-  color: #db6605;
-  font-weight: 600;
+  color: var(--brand);
+  font-weight: 700;
+  text-decoration: none;
 }
 
-/* Botões Laranja gerais */
-.btn-orange {
-  background-color: #db6605;
-  border-color: #db6605;
-  color: #fff;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.btn-orange:hover {
-  background-color: #914303;
-  border-color: #914303;
-}
-
-/* Títulos */
-h2, h3 {
-  font-weight: 600;
-  text-align: center;
-}
-
-/* Formulário de reserva */
-form {
-  background: #fff;
-  padding: 20px;
-  border-radius: 10px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-}
-
-/* Labels */
-.form-label {
-  font-weight: 500;
-}
-
-/* Ajuste para evitar barra de rolagem em modais de pop-up */
 .modal-body {
-  max-height: 70vh;
+  max-height: 65vh;
   overflow-y: auto;
 }
 
-/* Ajuste responsivo do calendário */
-@media (max-width: 991px) {
-  #calendar {
-    margin-bottom: 30px;
-  }
+.detail-row {
+  background: #f8fafc;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
 }
 
-/* Ajustes para smartphone */
+.detail-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6c757d;
+  margin-bottom: 0.25rem;
+}
+
+.detail-value {
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.weekday-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.5rem;
+}
+
+.weekday-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #f8fafc;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+}
+
+#appFeedback {
+  border-radius: 0.85rem;
+}
+
 @media (max-width: 768px) {
-  /* Calendário ocupa toda a largura */
-  #calendar {
+  .auth-box,
+  .section-card {
+    padding: 1rem;
+    border-radius: 0.85rem;
+  }
+
+  .fc .fc-toolbar {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: stretch;
+  }
+
+  .fc .fc-toolbar-title {
+    font-size: 1.15rem;
+  }
+
+  .fc .fc-button-group {
     width: 100%;
-    padding: 10px;
+  }
+
+  .fc .fc-button {
+    padding: 0.35rem 0.5rem;
     font-size: 0.85rem;
   }
 
-  /* Títulos menores */
-  h2, h3 {
-    font-size: 1.4rem;
-  }
-
-  /* Formulário: colunas empilhadas */
-  .row > .col-md-6 {
-    flex: 0 0 100%;
-    max-width: 100%;
-  }
-
-  /* Inputs e selects menores */
-  .form-control, .form-select {
-    font-size: 0.9rem;
-    padding: 6px 8px;
-  }
-
-  /* Botões menores e centralizados */
-  .btn-orange {
-    font-size: 0.9rem;
-    padding: 8px 10px;
+  .modal-footer .btn {
     width: 100%;
-    margin-bottom: 10px;
-  }
-
-  /* Área de login/logout */
-  #user-info {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    align-items: center;
   }
 }

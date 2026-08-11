@@ -2,10 +2,24 @@ const SESSION_COOKIE = "reserva_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 8;
 const ADMIN_ROLE = "admin";
 const USER_ROLE = "user";
+const TIMEZONE = "America/Sao_Paulo";
+
+const DEFAULT_ALLOWED_ORIGINS = [
+  "https://sevsrecife.github.io",
+  "http://localhost:8787",
+  "http://127.0.0.1:8787",
+  "http://localhost:5501",
+  "http://127.0.0.1:5501"
+];
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    if (request.method === "OPTIONS" && url.pathname.startsWith("/api/")) {
+      return handleOptions(request, env);
+    }
+
     if (url.pathname.startsWith("/api/")) {
       return handleApi(request, env, url);
     }
@@ -20,22 +34,22 @@ export default {
 
 async function handleApi(request, env, url) {
   const method = request.method.toUpperCase();
-  const hasSessionSecret = Boolean(env.SESSION_SECRET);
-  if (!hasSessionSecret && url.pathname !== "/api/config") {
-    return jsonError("Configuração de sessão ausente no servidor.", 500);
-  }
+  const origin = request.headers.get("Origin");
   const session = await getSessionFromRequest(request, env);
+  const cors = buildCorsHeaders(origin, env);
 
   if (url.pathname === "/api/config" && method === "GET") {
     return jsonResponse({
-      googleClientId: env.GOOGLE_CLIENT_ID || ""
-    });
+      googleClientId: env.GOOGLE_CLIENT_ID || "",
+      appName: "Reserva de Auditório"
+    }, 200, cors);
   }
 
   if (url.pathname === "/api/session" && method === "GET") {
     if (!session) {
-      return jsonResponse({ authenticated: false });
+      return jsonResponse({ authenticated: false }, 200, cors);
     }
+
     return jsonResponse({
       authenticated: true,
       role: session.role,
@@ -44,21 +58,22 @@ async function handleApi(request, env, url) {
         name: session.name,
         email: session.email
       }
-    });
+    }, 200, cors);
   }
 
   if (url.pathname === "/api/auth/google" && method === "POST") {
     if (!env.GOOGLE_CLIENT_ID) {
-      return jsonError("Configuração OAuth do Google ausente no servidor.", 500);
+      return jsonError("Configuração OAuth do Google ausente no servidor.", 500, cors);
     }
+
     const body = await parseJsonBody(request);
     if (!body?.idToken) {
-      return jsonError("Token do Google ausente.", 400);
+      return jsonError("Token do Google ausente.", 400, cors);
     }
 
     const googleUser = await validateGoogleIdToken(body.idToken, env.GOOGLE_CLIENT_ID);
     if (!googleUser) {
-      return jsonError("Falha na autenticação com Google.", 401);
+      return jsonError("Falha na autenticação com Google.", 401, cors);
     }
 
     const payload = {
@@ -67,22 +82,25 @@ async function handleApi(request, env, url) {
       name: googleUser.name || googleUser.email,
       role: USER_ROLE
     };
-    const sessionCookie = await buildSessionCookie(payload, env.SESSION_SECRET);
 
     return jsonResponse(
       { message: "Login realizado com sucesso." },
       200,
-      { "Set-Cookie": sessionCookie }
+      {
+        ...cors,
+        "Set-Cookie": await buildSessionCookie(payload, env.SESSION_SECRET, request)
+      }
     );
   }
 
   if (url.pathname === "/api/admin/login" && method === "POST") {
     if (!env.ADMIN_USERNAME || !env.ADMIN_PASSWORD_HASH || !env.ADMIN_PASSWORD_SALT) {
-      return jsonError("Configuração administrativa ausente no servidor.", 500);
+      return jsonError("Configuração administrativa ausente no servidor.", 500, cors);
     }
+
     const blocked = await checkAdminRateLimit(request, env);
     if (blocked) {
-      return jsonError("Muitas tentativas. Tente novamente mais tarde.", 429);
+      return jsonError("Muitas tentativas. Tente novamente mais tarde.", 429, cors);
     }
 
     const body = await parseJsonBody(request);
@@ -90,32 +108,36 @@ async function handleApi(request, env, url) {
     const password = normalizeText(body?.password);
     if (!username || !password) {
       await registerAdminLoginFailure(request, env);
-      return jsonError("Usuário e senha são obrigatórios.", 400);
+      return jsonError("Usuário e senha são obrigatórios.", 400, cors);
     }
 
     if (username !== env.ADMIN_USERNAME) {
       await registerAdminLoginFailure(request, env);
-      return jsonError("Credenciais administrativas inválidas.", 401);
+      return jsonError("Credenciais administrativas inválidas.", 401, cors);
     }
 
     const hashedPassword = await sha256Hex(`${password}${env.ADMIN_PASSWORD_SALT}`);
     if (hashedPassword !== env.ADMIN_PASSWORD_HASH) {
       await registerAdminLoginFailure(request, env);
-      return jsonError("Credenciais administrativas inválidas.", 401);
+      return jsonError("Credenciais administrativas inválidas.", 401, cors);
     }
 
     await clearAdminRateLimit(request, env);
+
     const payload = {
       sub: "admin",
       email: env.ADMIN_USERNAME,
       name: "Administrador",
       role: ADMIN_ROLE
     };
-    const sessionCookie = await buildSessionCookie(payload, env.SESSION_SECRET);
+
     return jsonResponse(
       { message: "Login administrativo realizado com sucesso." },
       200,
-      { "Set-Cookie": sessionCookie }
+      {
+        ...cors,
+        "Set-Cookie": await buildSessionCookie(payload, env.SESSION_SECRET, request)
+      }
     );
   }
 
@@ -123,189 +145,247 @@ async function handleApi(request, env, url) {
     return jsonResponse(
       { message: "Logout realizado." },
       200,
-      { "Set-Cookie": clearSessionCookie() }
+      {
+        ...cors,
+        "Set-Cookie": clearSessionCookie(request)
+      }
     );
   }
 
   if (url.pathname === "/api/reservas" && method === "GET") {
+    if (!session) {
+      return jsonError("Usuário não autenticado.", 401, cors);
+    }
+
     const rows = await env.RESERVAS_DB.prepare(
-      `SELECT id, descricao, nome, setor, telefone, email_contato, data_reserva, hora_inicio, hora_fim, inicio_iso, fim_iso, owner_google_id, owner_name, owner_email, status, is_imported
+      `SELECT *
        FROM reservations
        WHERE status != 'cancelada'
        ORDER BY inicio_iso ASC`
     ).all();
-    return jsonResponse({ reservas: rows.results || [] });
+
+    const reservations = (rows.results || []).map((row) => serializeReservation(row, session, session.role === ADMIN_ROLE));
+    return jsonResponse({ reservas: reservations }, 200, cors);
   }
 
   if (url.pathname === "/api/minhas-reservas" && method === "GET") {
     if (!session || session.role !== USER_ROLE) {
-      return jsonError("Usuário não autenticado.", 401);
+      return jsonError("Usuário não autenticado.", 401, cors);
     }
+
     const rows = await env.RESERVAS_DB.prepare(
-      `SELECT id, descricao, nome, setor, telefone, email_contato, data_reserva, hora_inicio, hora_fim, inicio_iso, fim_iso, status
+      `SELECT *
        FROM reservations
        WHERE owner_google_id = ?
-         AND is_imported = 0
+         AND status != 'cancelada'
        ORDER BY inicio_iso ASC`
     ).bind(session.sub).all();
-    return jsonResponse({ reservas: rows.results || [] });
+
+    const reservations = (rows.results || []).map((row) => serializeReservation(row, session, false));
+    return jsonResponse({ reservas: reservations }, 200, cors);
   }
 
   if (url.pathname === "/api/reservas" && method === "POST") {
     if (!session) {
-      return jsonError("Usuário não autenticado.", 401);
+      return jsonError("Usuário não autenticado.", 401, cors);
     }
     if (session.role !== USER_ROLE) {
-      return jsonError("Administrador não pode criar reservas.", 403);
+      return jsonError("Administrador não pode criar reservas.", 403, cors);
     }
 
     const body = await parseJsonBody(request);
-    const validation = validateReservationInput(body);
-    if (!validation.valid) {
-      return jsonError(validation.message, 400);
-    }
-    const normalized = validation.value;
-
-    const conflict = await env.RESERVAS_DB.prepare(
-      `SELECT id
-       FROM reservations
-       WHERE status != 'cancelada'
-         AND inicio_iso < ?
-         AND fim_iso > ?
-       LIMIT 1`
-    ).bind(normalized.fimIso, normalized.inicioIso).first();
-    if (conflict) {
-      return jsonError("Horário já reservado para este período.", 409);
+    const normalized = normalizeReservationBody(body);
+    if (!normalized.valid) {
+      return jsonError(normalized.message, 400, cors);
     }
 
-    const id = crypto.randomUUID();
+    let occurrenceDates;
+    try {
+      occurrenceDates = generateOccurrenceDates(normalized);
+    } catch (error) {
+      return jsonError(error.message || "Recorrência inválida.", 400, cors);
+    }
+    if (!occurrenceDates.length) {
+      return jsonError("A recorrência informada não gera nenhuma ocorrência válida.", 400, cors);
+    }
+    const conflicts = await findConflictsForOccurrences(env, occurrenceDates, normalized, null);
+    if (conflicts.length) {
+      return jsonResponse({
+        error: "Existem conflitos de horário.",
+        conflicts: conflicts.map(formatConflict)
+      }, 409, cors);
+    }
+
     const nowIso = new Date().toISOString();
-    const calendarUrl = buildGoogleCalendarUrl({
-      title: normalized.descricao,
-      startIso: normalized.inicioIso,
-      endIso: normalized.fimIso,
-      description: `${normalized.descricao}\nReservado por: ${session.name} (${session.email})\nSetor: ${normalized.setor}`,
-      location: normalized.local
-    });
+    const seriesId = normalized.recurrencePattern === "single" ? null : crypto.randomUUID();
+    const reservations = [];
 
-    await env.RESERVAS_DB.prepare(
-      `INSERT INTO reservations (
-        id, owner_google_id, owner_name, owner_email,
-        nome, setor, telefone, email_contato, descricao,
-        data_reserva, hora_inicio, hora_fim, inicio_iso, fim_iso,
-        status, google_calendar_url, created_at, updated_at, is_imported
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(
-      id,
-      session.sub,
-      session.name,
-      session.email,
-      normalized.nome,
-      normalized.setor,
-      normalized.telefone,
-      normalized.emailContato,
-      normalized.descricao,
-      normalized.dataReserva,
-      normalized.horaInicio,
-      normalized.horaFim,
-      normalized.inicioIso,
-      normalized.fimIso,
-      "ativa",
-      calendarUrl,
-      nowIso,
-      nowIso,
-      0
-    ).run();
-
-    return jsonResponse({
-      message: "Reserva criada com sucesso.",
-      reserva: {
-        id,
-        ...normalized,
+    for (let index = 0; index < occurrenceDates.length; index += 1) {
+      const occurrenceDate = occurrenceDates[index];
+      const reservation = await insertReservation(env, {
+        id: crypto.randomUUID(),
         ownerGoogleId: session.sub,
         ownerName: session.name,
         ownerEmail: session.email,
-        status: "ativa"
-      },
-      googleCalendarUrl: calendarUrl
-    }, 201);
+        nome: normalized.nome,
+        setor: normalized.setor,
+        telefone: normalized.telefone,
+        emailContato: normalized.emailContato,
+        descricao: normalized.descricao,
+        dataReserva: occurrenceDate,
+        horaInicio: normalized.horaInicio,
+        horaFim: normalized.horaFim,
+        inicioIso: buildLocalIso(occurrenceDate, normalized.horaInicio),
+        fimIso: buildLocalIso(occurrenceDate, normalized.horaFim),
+        status: "ativa",
+        googleCalendarUrl: buildGoogleCalendarUrl({
+          title: normalized.descricao,
+          startIso: buildLocalIso(occurrenceDate, normalized.horaInicio),
+          endIso: buildLocalIso(occurrenceDate, normalized.horaFim),
+          description: buildReservationDescription({
+            descricao: normalized.descricao,
+            ownerName: session.name,
+            ownerEmail: session.email,
+            setor: normalized.setor,
+            telefone: normalized.telefone,
+            inviteEmails: normalized.inviteEmails
+          }),
+          location: "Auditório",
+          attendees: normalized.inviteEmails
+        }),
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        isImported: 0,
+        sourceOrigin: "manual",
+        sourceReference: null,
+        auditPayloadJson: JSON.stringify({
+          requestedBy: {
+            id: session.sub,
+            name: session.name,
+            email: session.email
+          },
+          original: body || null
+        }),
+        recurrencePattern: normalized.recurrencePattern,
+        recurrenceSeriesId: seriesId,
+        recurrenceOccurrence: index,
+        recurrenceUntil: normalized.recurrenceUntil || null,
+        recurrenceWeekdaysJson: JSON.stringify(normalized.recurrenceWeekdays || []),
+        createdByRole: session.role,
+        updatedByRole: session.role
+      });
+      reservations.push(reservation);
+    }
+
+    return jsonResponse({
+      message: reservations.length > 1
+        ? "Série de reservas criada com sucesso."
+        : "Reserva criada com sucesso.",
+      reservation: reservations[0],
+      reservations,
+      seriesId,
+      googleCalendarUrl: reservations[0]?.googleCalendarUrl || null,
+      shareEmailUrl: buildShareEmailUrl({
+        reservation: reservations[0],
+        ownerName: session.name,
+        ownerEmail: session.email
+      })
+    }, 201, cors);
   }
 
   if (url.pathname.startsWith("/api/reservas/") && method === "DELETE") {
     if (!session) {
-      return jsonError("Usuário não autenticado.", 401);
+      return jsonError("Usuário não autenticado.", 401, cors);
     }
+
     const reservationId = url.pathname.split("/").pop();
     if (!reservationId) {
-      return jsonError("ID da reserva inválido.", 400);
+      return jsonError("ID da reserva inválido.", 400, cors);
     }
 
     const existing = await env.RESERVAS_DB.prepare(
-      `SELECT id, owner_google_id, is_imported FROM reservations WHERE id = ?`
+      `SELECT id, owner_google_id, is_imported
+       FROM reservations
+       WHERE id = ?`
     ).bind(reservationId).first();
+
     if (!existing) {
-      return jsonError("Reserva não encontrada.", 404);
+      return jsonError("Reserva não encontrada.", 404, cors);
     }
 
-    const isImportedReservation = Boolean(existing.is_imported);
     const canDelete =
       session.role === ADMIN_ROLE ||
-      (session.role === USER_ROLE && !isImportedReservation && existing.owner_google_id === session.sub);
+      (session.role === USER_ROLE && !existing.is_imported && existing.owner_google_id === session.sub);
+
     if (!canDelete) {
       return jsonError(
-        isImportedReservation
+        existing.is_imported
           ? "Reservas importadas só podem ser alteradas ou excluídas por um administrador."
           : "Acesso não autorizado para excluir esta reserva.",
-        403
+        403,
+        cors
       );
     }
 
-    await env.RESERVAS_DB.prepare(
-      `DELETE FROM reservations WHERE id = ?`
-    ).bind(reservationId).run();
-    return jsonResponse({ message: "Reserva excluída com sucesso." });
+    await env.RESERVAS_DB.prepare("DELETE FROM reservations WHERE id = ?")
+      .bind(reservationId)
+      .run();
+
+    return jsonResponse({ message: "Reserva excluída com sucesso." }, 200, cors);
   }
 
   if (url.pathname === "/api/admin/reservas" && method === "GET") {
     if (!session || session.role !== ADMIN_ROLE) {
-      return jsonError("Acesso administrativo não autorizado.", 403);
+      return jsonError("Acesso administrativo não autorizado.", 403, cors);
     }
+
     const rows = await env.RESERVAS_DB.prepare(
-      `SELECT id, owner_google_id, owner_name, owner_email, nome, setor, telefone, email_contato, descricao,
-              data_reserva, hora_inicio, hora_fim, inicio_iso, fim_iso, status, created_at, updated_at, is_imported
+      `SELECT *
        FROM reservations
        ORDER BY inicio_iso ASC`
     ).all();
-    return jsonResponse({ reservas: rows.results || [] });
+
+    const reservations = (rows.results || []).map((row) => serializeReservation(row, session, true));
+    return jsonResponse({ reservas: reservations }, 200, cors);
   }
 
   if (url.pathname.startsWith("/api/admin/reservas/") && method === "PUT") {
     if (!session || session.role !== ADMIN_ROLE) {
-      return jsonError("Acesso administrativo não autorizado.", 403);
+      return jsonError("Acesso administrativo não autorizado.", 403, cors);
     }
+
     const reservationId = url.pathname.split("/").pop();
     if (!reservationId) {
-      return jsonError("ID da reserva inválido.", 400);
+      return jsonError("ID da reserva inválido.", 400, cors);
+    }
+
+    const existing = await env.RESERVAS_DB.prepare(
+      `SELECT *
+       FROM reservations
+       WHERE id = ?`
+    ).bind(reservationId).first();
+    if (!existing) {
+      return jsonError("Reserva não encontrada.", 404, cors);
     }
 
     const body = await parseJsonBody(request);
-    const validation = validateReservationUpdateInput(body);
-    if (!validation.valid) {
-      return jsonError(validation.message, 400);
+    const normalized = normalizeReservationBody(body, { requireRecurringEnd: false });
+    if (!normalized.valid) {
+      return jsonError(normalized.message, 400, cors);
     }
-    const normalized = validation.value;
 
-    const conflict = await env.RESERVAS_DB.prepare(
-      `SELECT id
-       FROM reservations
-       WHERE id != ?
-         AND status != 'cancelada'
-         AND inicio_iso < ?
-         AND fim_iso > ?
-       LIMIT 1`
-    ).bind(reservationId, normalized.fimIso, normalized.inicioIso).first();
-    if (conflict) {
-      return jsonError("Horário já reservado para este período.", 409);
+    const conflictInput = {
+      ...normalized,
+      recurrencePattern: "single",
+      recurrenceWeekdays: []
+    };
+    const candidateDate = normalized.dataReserva;
+    const conflicts = await findConflictsForOccurrences(env, [candidateDate], conflictInput, reservationId);
+    if (conflicts.length) {
+      return jsonResponse({
+        error: "Existem conflitos de horário.",
+        conflicts: conflicts.map(formatConflict)
+      }, 409, cors);
     }
 
     const updatedAt = new Date().toISOString();
@@ -313,7 +393,7 @@ async function handleApi(request, env, url) {
       `UPDATE reservations
        SET nome = ?, setor = ?, telefone = ?, email_contato = ?, descricao = ?,
            data_reserva = ?, hora_inicio = ?, hora_fim = ?, inicio_iso = ?, fim_iso = ?,
-           status = ?, updated_at = ?
+           status = ?, updated_at = ?, updated_by_role = ?
        WHERE id = ?`
     ).bind(
       normalized.nome,
@@ -324,143 +404,664 @@ async function handleApi(request, env, url) {
       normalized.dataReserva,
       normalized.horaInicio,
       normalized.horaFim,
-      normalized.inicioIso,
-      normalized.fimIso,
+      buildLocalIso(normalized.dataReserva, normalized.horaInicio),
+      buildLocalIso(normalized.dataReserva, normalized.horaFim),
       normalized.status,
       updatedAt,
+      session.role,
       reservationId
     ).run();
 
-    return jsonResponse({ message: "Reserva atualizada com sucesso." });
+    return jsonResponse({ message: "Reserva atualizada com sucesso." }, 200, cors);
+  }
+
+  if (url.pathname === "/api/admin/reservas" && method === "POST") {
+    return jsonError("Administrador não pode criar reservas.", 403, cors);
   }
 
   if (url.pathname.startsWith("/api/admin/reservas/") && method === "DELETE") {
     if (!session || session.role !== ADMIN_ROLE) {
-      return jsonError("Acesso administrativo não autorizado.", 403);
+      return jsonError("Acesso administrativo não autorizado.", 403, cors);
     }
+
     const reservationId = url.pathname.split("/").pop();
     if (!reservationId) {
-      return jsonError("ID da reserva inválido.", 400);
+      return jsonError("ID da reserva inválido.", 400, cors);
+    }
+
+    const existing = await env.RESERVAS_DB.prepare(
+      `SELECT id
+       FROM reservations
+       WHERE id = ?`
+    ).bind(reservationId).first();
+
+    if (!existing) {
+      return jsonError("Reserva não encontrada.", 404, cors);
     }
 
     await env.RESERVAS_DB.prepare("DELETE FROM reservations WHERE id = ?")
       .bind(reservationId)
       .run();
-    return jsonResponse({ message: "Reserva excluída com sucesso." });
+
+    return jsonResponse({ message: "Reserva excluída com sucesso." }, 200, cors);
   }
 
-  if (url.pathname === "/api/admin/reservas" && method === "POST") {
-    return jsonError("Administrador não pode criar reservas.", 403);
+  if (url.pathname === "/api/admin/import/backups" && method === "POST") {
+    if (!session || session.role !== ADMIN_ROLE) {
+      return jsonError("Acesso administrativo não autorizado.", 403, cors);
+    }
+
+    const body = await parseJsonBody(request);
+    const imported = await importBackupReservations(env, body);
+    return jsonResponse(imported.result, imported.status, cors);
   }
 
-  return jsonError("Rota não encontrada.", 404);
+  return jsonError("Rota não encontrada.", 404, cors);
 }
 
-function validateReservationInput(body) {
-  const nome = normalizeText(body?.nome);
-  const setor = normalizeText(body?.setor);
-  const telefone = normalizeText(body?.telefone);
-  const emailContato = normalizeText(body?.email);
-  const descricao = normalizeText(body?.descricao);
-  const dataReserva = normalizeText(body?.dataReserva);
-  const horaInicio = normalizeText(body?.horaInicio);
-  const horaFim = normalizeText(body?.horaFim);
-  const local = normalizeText(body?.local || "");
+async function handleOptions(request, env) {
+  const origin = request.headers.get("Origin");
+  const cors = buildCorsHeaders(origin, env, request.headers.get("Access-Control-Request-Headers") || "");
+  return new Response(null, {
+    status: 204,
+    headers: cors
+  });
+}
+
+function buildCorsHeaders(origin, env, requestedHeaders = "Content-Type, Authorization") {
+  const headers = new Headers();
+  if (isAllowedOrigin(origin, env)) {
+    headers.set("Access-Control-Allow-Origin", origin);
+    headers.set("Access-Control-Allow-Credentials", "true");
+    headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+    headers.set("Access-Control-Allow-Headers", requestedHeaders || "Content-Type, Authorization");
+    headers.set("Access-Control-Max-Age", "86400");
+    headers.append("Vary", "Origin");
+  }
+  return headers;
+}
+
+function isAllowedOrigin(origin, env) {
+  if (!origin) {
+    return false;
+  }
+
+  const configured = String(env.ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const allowed = configured.length ? configured : DEFAULT_ALLOWED_ORIGINS;
+  return allowed.includes(origin);
+}
+
+async function insertReservation(env, record) {
+  await env.RESERVAS_DB.prepare(
+    `INSERT INTO reservations (
+      id, owner_google_id, owner_name, owner_email,
+      nome, setor, telefone, email_contato, descricao,
+      data_reserva, hora_inicio, hora_fim, inicio_iso, fim_iso,
+      status, google_calendar_url, created_at, updated_at,
+      is_imported, source_origin, source_reference, audit_payload_json,
+      recurrence_pattern, recurrence_series_id, recurrence_occurrence,
+      recurrence_until, recurrence_weekdays_json, created_by_role, updated_by_role
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    record.id,
+    record.ownerGoogleId,
+    record.ownerName,
+    record.ownerEmail,
+    record.nome,
+    record.setor,
+    record.telefone,
+    record.emailContato,
+    record.descricao,
+    record.dataReserva,
+    record.horaInicio,
+    record.horaFim,
+    record.inicioIso,
+    record.fimIso,
+    record.status,
+    record.googleCalendarUrl,
+    record.createdAt,
+    record.updatedAt,
+    record.isImported,
+    record.sourceOrigin,
+    record.sourceReference,
+    record.auditPayloadJson,
+    record.recurrencePattern,
+    record.recurrenceSeriesId,
+    record.recurrenceOccurrence,
+    record.recurrenceUntil,
+    record.recurrenceWeekdaysJson,
+    record.createdByRole,
+    record.updatedByRole
+  ).run();
+
+  return {
+    id: record.id,
+    ownerGoogleId: record.ownerGoogleId,
+    ownerName: record.ownerName,
+    ownerEmail: record.ownerEmail,
+    nome: record.nome,
+    setor: record.setor,
+    telefone: record.telefone,
+    emailContato: record.emailContato,
+    descricao: record.descricao,
+    dataReserva: record.dataReserva,
+    horaInicio: record.horaInicio,
+    horaFim: record.horaFim,
+    inicioIso: record.inicioIso,
+    fimIso: record.fimIso,
+    status: record.status,
+    googleCalendarUrl: record.googleCalendarUrl,
+    isImported: Boolean(record.isImported),
+    sourceOrigin: record.sourceOrigin,
+    sourceReference: record.sourceReference,
+    recurrencePattern: record.recurrencePattern,
+    recurrenceSeriesId: record.recurrenceSeriesId,
+    recurrenceOccurrence: record.recurrenceOccurrence,
+    recurrenceUntil: record.recurrenceUntil,
+    recurrenceWeekdays: JSON.parse(record.recurrenceWeekdaysJson || "[]")
+  };
+}
+
+function serializeReservation(row, session, isAdmin) {
+  const isOwner = session?.sub && row.owner_google_id === session.sub;
+  const canDelete = isAdmin || (isOwner && !row.is_imported);
+  const canEdit = isAdmin;
+
+  const base = {
+    id: row.id,
+    nome: row.nome,
+    setor: row.setor,
+    telefone: row.telefone,
+    emailContato: row.email_contato,
+    descricao: row.descricao,
+    dataReserva: row.data_reserva,
+    horaInicio: row.hora_inicio,
+    horaFim: row.hora_fim,
+    inicioIso: row.inicio_iso,
+    fimIso: row.fim_iso,
+    status: row.status,
+    isImported: Boolean(row.is_imported),
+    sourceOrigin: row.source_origin,
+    sourceReference: row.source_reference,
+    recurrencePattern: row.recurrence_pattern,
+    recurrenceSeriesId: row.recurrence_series_id,
+    recurrenceOccurrence: row.recurrence_occurrence,
+    recurrenceUntil: row.recurrence_until,
+    recurrenceWeekdays: safeJsonParse(row.recurrence_weekdays_json, []),
+    canDelete,
+    canEdit,
+    ownerName: row.owner_name
+  };
+
+  if (isAdmin) {
+    base.ownerGoogleId = row.owner_google_id;
+    base.ownerEmail = row.owner_email;
+    base.createdAt = row.created_at;
+    base.updatedAt = row.updated_at;
+    base.createdByRole = row.created_by_role;
+    base.updatedByRole = row.updated_by_role;
+    base.auditPayloadJson = row.audit_payload_json;
+    base.googleCalendarUrl = row.google_calendar_url;
+  }
+
+  return base;
+}
+
+function normalizeReservationBody(body, options = {}) {
+  const nome = normalizeText(body?.nome || body?.responsavel || "");
+  const setor = normalizeText(body?.setor || "");
+  const telefone = normalizeText(body?.telefone || "");
+  const emailContato = normalizeText(body?.emailContato || body?.email || "");
+  const descricao = normalizeText(body?.descricao || "");
+  const dataReserva = normalizeText(body?.dataReserva || body?.dataInicio || body?.date || "");
+  const dataFim = normalizeText(body?.dataFim || body?.recurrenceUntil || dataReserva);
+  const horaInicio = normalizeText(body?.horaInicio || body?.inicio || "");
+  const horaFim = normalizeText(body?.horaFim || body?.fim || "");
+  const status = normalizeText(body?.status || "ativa") || "ativa";
+  const recurrencePattern = normalizeRecurrencePattern(body?.recurrencePattern || body?.recurrence?.pattern || "single");
+  const recurrenceWeekdays = parseWeekdays(body?.recurrenceWeekdays || body?.recurrence?.weekdays || []);
+  const inviteEmails = parseEmailList(body?.inviteEmails || body?.convidados || "");
 
   if (!nome || !setor || !telefone || !emailContato || !descricao || !dataReserva || !horaInicio || !horaFim) {
     return { valid: false, message: "Dados obrigatórios ausentes para a reserva." };
   }
+
   if (!isValidEmail(emailContato)) {
     return { valid: false, message: "E-mail da reserva inválido." };
   }
-  if (!isValidDate(dataReserva) || !isValidTime(horaInicio) || !isValidTime(horaFim)) {
-    return { valid: false, message: "Data ou horário inválido." };
+
+  if (!isValidDate(dataReserva) || !isValidDate(dataFim)) {
+    return { valid: false, message: "Data da reserva inválida." };
   }
 
-  const dateInfo = buildReservationInterval(dataReserva, horaInicio, horaFim);
-  if (!dateInfo.valid) {
-    return { valid: false, message: dateInfo.message };
+  if (!isValidTime(horaInicio) || !isValidTime(horaFim)) {
+    return { valid: false, message: "Horário inválido." };
   }
 
-  return {
-    valid: true,
-    value: {
-      nome,
-      setor,
-      telefone,
-      emailContato,
-      descricao,
-      dataReserva,
-      horaInicio,
-      horaFim,
-      inicioIso: dateInfo.inicioIso,
-      fimIso: dateInfo.fimIso,
-      local
-    }
-  };
-}
-
-function validateReservationUpdateInput(body) {
-  const baseValidation = validateReservationInput({
-    ...body,
-    email: body?.email_contato || body?.email
-  });
-  if (!baseValidation.valid) {
-    return baseValidation;
+  if (!isWorkingTime(horaInicio) || !isWorkingTime(horaFim)) {
+    return { valid: false, message: "Horários permitidos: 08:00 até 17:00, de 30 em 30 minutos." };
   }
-  const status = normalizeText(body?.status || "ativa");
+
   if (!["ativa", "cancelada"].includes(status)) {
     return { valid: false, message: "Status de reserva inválido." };
   }
 
+  if (!isWorkingDate(dataReserva)) {
+    return { valid: false, message: "Só é permitido reservar de segunda a sexta-feira." };
+  }
+
+  if (compareDateStrings(dataFim, dataReserva) < 0) {
+    return { valid: false, message: "A data final precisa ser igual ou posterior à data inicial." };
+  }
+
+  if (compareTimes(horaFim, horaInicio) <= 0) {
+    return { valid: false, message: "Hora final deve ser maior que a hora inicial." };
+  }
+
+  if (recurrencePattern !== "single" && !options.allowRecurringEnd && compareDateStrings(dataFim, dataReserva) < 0) {
+    return { valid: false, message: "A recorrência precisa ter data final válida." };
+  }
+
+  const normalizedWeekdays = recurrencePattern === "weekly"
+    ? (recurrenceWeekdays.length ? recurrenceWeekdays : [weekdayFromDate(dataReserva)])
+    : [];
+
   return {
     valid: true,
-    value: {
-      ...baseValidation.value,
-      status
+    nome,
+    setor,
+    telefone,
+    emailContato,
+    descricao,
+    dataReserva,
+    dataFim,
+    horaInicio,
+    horaFim,
+    status,
+    recurrencePattern,
+    recurrenceWeekdays: normalizedWeekdays,
+    recurrenceUntil: recurrencePattern === "single" ? null : dataFim,
+    inviteEmails
+  };
+}
+
+function generateOccurrenceDates(normalized) {
+  if (normalized.recurrencePattern === "single") {
+    return [normalized.dataReserva];
+  }
+
+  if (normalized.recurrencePattern === "daily") {
+    return enumerateDates(normalized.dataReserva, normalized.dataFim);
+  }
+
+  if (normalized.recurrencePattern === "weekly") {
+    const dates = [];
+    for (const date of enumerateDates(normalized.dataReserva, normalized.dataFim)) {
+      if (normalized.recurrenceWeekdays.includes(weekdayFromDate(date))) {
+        dates.push(date);
+      }
+    }
+    if (!dates.length) {
+      return [];
+    }
+    return dates;
+  }
+
+  if (normalized.recurrencePattern === "monthly") {
+    return enumerateMonthlyDates(normalized.dataReserva, normalized.dataFim);
+  }
+
+  return [normalized.dataReserva];
+}
+
+async function findConflictsForOccurrences(env, occurrenceDates, normalized, excludeReservationId) {
+  const conflicts = [];
+  const seenIntervals = [];
+  for (const occurrenceDate of occurrenceDates) {
+    const startIso = buildLocalIso(occurrenceDate, normalized.horaInicio);
+    const endIso = buildLocalIso(occurrenceDate, normalized.horaFim);
+
+    for (const seen of seenIntervals) {
+      if (intervalsOverlap(startIso, endIso, seen.startIso, seen.endIso)) {
+        conflicts.push({
+          id: seen.id,
+          inicioIso: seen.startIso,
+          fimIso: seen.endIso,
+          descricao: seen.descricao,
+          dataReserva: seen.dataReserva
+        });
+      }
+    }
+
+    const query = excludeReservationId
+      ? `SELECT id, inicio_iso, fim_iso, descricao, data_reserva
+         FROM reservations
+         WHERE id != ?
+           AND status != 'cancelada'
+           AND inicio_iso < ?
+           AND fim_iso > ?
+         LIMIT 20`
+      : `SELECT id, inicio_iso, fim_iso, descricao, data_reserva
+         FROM reservations
+         WHERE status != 'cancelada'
+           AND inicio_iso < ?
+           AND fim_iso > ?
+         LIMIT 20`;
+
+    const stmt = excludeReservationId
+      ? env.RESERVAS_DB.prepare(query).bind(excludeReservationId, endIso, startIso)
+      : env.RESERVAS_DB.prepare(query).bind(endIso, startIso);
+    const rows = await stmt.all();
+    for (const row of rows.results || []) {
+      conflicts.push({
+        id: row.id,
+        inicioIso: row.inicio_iso,
+        fimIso: row.fim_iso,
+        descricao: row.descricao,
+        dataReserva: row.data_reserva
+      });
+    }
+
+    seenIntervals.push({
+      id: "__pending__",
+      startIso,
+      endIso,
+      descricao: normalized.descricao,
+      dataReserva: occurrenceDate
+    });
+  }
+
+  const unique = new Map();
+  for (const conflict of conflicts) {
+    unique.set(`${conflict.id}|${conflict.inicioIso}|${conflict.fimIso}`, conflict);
+  }
+  return [...unique.values()];
+}
+
+async function importBackupReservations(env, body) {
+  const rawReservations = Array.isArray(body)
+    ? body
+    : Array.isArray(body?.reservasFuturas)
+      ? body.reservasFuturas
+      : Array.isArray(body?.reservas)
+        ? body.reservas
+        : null;
+
+  if (!rawReservations) {
+    return {
+      status: 400,
+      result: { error: "Backup inválido. Esperava uma lista de reservas futuras." }
+    };
+  }
+
+  const now = new Date();
+  const importedAt = now.toISOString();
+  const candidates = rawReservations
+    .map((item) => normalizeBackupRecord(item))
+    .filter(Boolean)
+    .filter((item) => new Date(item.fimIso).getTime() > now.getTime())
+    .sort((a, b) => a.inicioIso.localeCompare(b.inicioIso));
+
+  const summary = {
+    totalEncontradas: rawReservations.length,
+    elegiveis: candidates.length,
+    inseridas: 0,
+    puladasDuplicadas: 0,
+    puladasConflito: 0,
+    puladasInvalidas: 0,
+    conflitos: []
+  };
+
+  const acceptedIntervals = [];
+  for (const candidate of candidates) {
+    const hasSource = await env.RESERVAS_DB.prepare(
+      `SELECT id FROM reservations WHERE source_origin = 'backup-json' AND source_reference = ? LIMIT 1`
+    ).bind(candidate.sourceReference).first();
+    if (hasSource) {
+      summary.puladasDuplicadas += 1;
+      continue;
+    }
+
+    const localConflict = acceptedIntervals.find((interval) => intervalsOverlap(candidate.inicioIso, candidate.fimIso, interval.inicioIso, interval.fimIso));
+    if (localConflict) {
+      summary.puladasConflito += 1;
+      summary.conflitos.push({
+        sourceReference: candidate.sourceReference,
+        conflitoCom: localConflict.sourceReference,
+        inicioIso: candidate.inicioIso,
+        fimIso: candidate.fimIso
+      });
+      continue;
+    }
+
+    const dbConflict = await env.RESERVAS_DB.prepare(
+      `SELECT id, source_reference, inicio_iso, fim_iso
+       FROM reservations
+       WHERE status != 'cancelada'
+         AND inicio_iso < ?
+         AND fim_iso > ?
+       LIMIT 1`
+    ).bind(candidate.fimIso, candidate.inicioIso).first();
+
+    if (dbConflict) {
+      summary.puladasConflito += 1;
+      summary.conflitos.push({
+        sourceReference: candidate.sourceReference,
+        conflitoCom: dbConflict.source_reference || dbConflict.id,
+        inicioIso: candidate.inicioIso,
+        fimIso: candidate.fimIso
+      });
+      continue;
+    }
+
+    await insertReservation(env, {
+      id: candidate.id,
+      ownerGoogleId: candidate.ownerGoogleId,
+      ownerName: candidate.ownerName,
+      ownerEmail: candidate.ownerEmail,
+      nome: candidate.nome,
+      setor: candidate.setor,
+      telefone: candidate.telefone,
+      emailContato: candidate.emailContato,
+      descricao: candidate.descricao,
+      dataReserva: candidate.dataReserva,
+      horaInicio: candidate.horaInicio,
+      horaFim: candidate.horaFim,
+      inicioIso: candidate.inicioIso,
+      fimIso: candidate.fimIso,
+      status: "ativa",
+      googleCalendarUrl: buildGoogleCalendarUrl({
+        title: candidate.descricao,
+        startIso: candidate.inicioIso,
+        endIso: candidate.fimIso,
+        description: buildReservationDescription({
+          descricao: candidate.descricao,
+          ownerName: candidate.ownerName,
+          ownerEmail: candidate.ownerEmail,
+          setor: candidate.setor,
+          telefone: candidate.telefone,
+          inviteEmails: []
+        }),
+        location: "Auditório",
+        attendees: []
+      }),
+      createdAt: candidate.createdAt || importedAt,
+      updatedAt: candidate.updatedAt || importedAt,
+      isImported: 1,
+      sourceOrigin: "backup-json",
+      sourceReference: candidate.sourceReference,
+      auditPayloadJson: JSON.stringify(candidate.raw),
+      recurrencePattern: "single",
+      recurrenceSeriesId: null,
+      recurrenceOccurrence: 0,
+      recurrenceUntil: null,
+      recurrenceWeekdaysJson: "[]",
+      createdByRole: ADMIN_ROLE,
+      updatedByRole: ADMIN_ROLE
+    });
+
+    acceptedIntervals.push(candidate);
+    summary.inseridas += 1;
+  }
+
+  return {
+    status: 200,
+    result: {
+      message: "Importação concluída.",
+      summary
     }
   };
 }
 
-function buildReservationInterval(dataReserva, horaInicio, horaFim) {
-  const date = new Date(`${dataReserva}T00:00:00`);
-  if (Number.isNaN(date.getTime())) {
-    return { valid: false, message: "Data da reserva inválida." };
-  }
-  const day = date.getDay();
-  if (day === 0 || day === 6) {
-    return { valid: false, message: "Só é permitido reservar de segunda a sexta-feira." };
+function normalizeBackupRecord(item) {
+  if (!item || typeof item !== "object") {
+    return null;
   }
 
-  if (!isWorkingHour(horaInicio) || !isWorkingHour(horaFim)) {
-    return { valid: false, message: "Horários permitidos: 08:00 até 17:00, de 30 em 30 minutos." };
-  }
+  const inicioIso = new Date(item.inicio).toISOString();
+  const fimIso = new Date(item.fim).toISOString();
+  const dataReserva = formatDateInTimezone(inicioIso);
+  const horaInicio = formatTimeInTimezone(inicioIso);
+  const horaFim = formatTimeInTimezone(fimIso);
 
-  const inicio = new Date(`${dataReserva}T${horaInicio}:00`);
-  const fim = new Date(`${dataReserva}T${horaFim}:00`);
-  if (Number.isNaN(inicio.getTime()) || Number.isNaN(fim.getTime())) {
-    return { valid: false, message: "Horário inválido." };
-  }
-  if (fim <= inicio) {
-    return { valid: false, message: "Hora final deve ser maior que a hora inicial." };
+  if (!isValidDate(dataReserva) || !isValidTime(horaInicio) || !isValidTime(horaFim)) {
+    return null;
   }
 
   return {
-    valid: true,
-    inicioIso: inicio.toISOString(),
-    fimIso: fim.toISOString()
+    id: normalizeText(item.id) || crypto.randomUUID(),
+    sourceReference: normalizeText(item.id) || crypto.randomUUID(),
+    ownerGoogleId: normalizeText(item.usuarioId) || `backup-${normalizeText(item.id)}`,
+    ownerName: normalizeText(item.nome),
+    ownerEmail: normalizeText(item.email),
+    nome: normalizeText(item.nome),
+    setor: normalizeText(item.setor),
+    telefone: normalizeText(item.telefone),
+    emailContato: normalizeText(item.email),
+    descricao: normalizeText(item.descricao),
+    inicioIso,
+    fimIso,
+    dataReserva,
+    horaInicio,
+    horaFim,
+    createdAt: item.raw?.createTime || item.raw?.updateTime || new Date().toISOString(),
+    updatedAt: item.raw?.updateTime || item.raw?.createTime || new Date().toISOString(),
+    raw: item.raw || item
   };
 }
 
-function normalizeText(value) {
-  if (typeof value !== "string") {
-    return "";
-  }
-  return value.trim();
+function formatConflict(conflict) {
+  return {
+    id: conflict.id,
+    descricao: conflict.descricao,
+    dataReserva: conflict.dataReserva,
+    inicio: formatDateTime(conflict.inicioIso),
+    fim: formatDateTime(conflict.fimIso)
+  };
 }
 
-function isValidEmail(email) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+function buildReservationDescription({ descricao, ownerName, ownerEmail, setor, telefone, inviteEmails }) {
+  const lines = [
+    descricao,
+    `Responsável: ${ownerName} (${ownerEmail})`,
+    `Setor: ${setor}`,
+    `Telefone: ${telefone}`
+  ];
+  if (inviteEmails.length) {
+    lines.push(`Convidados: ${inviteEmails.join(", ")}`);
+  }
+  return lines.join("\n");
+}
+
+function buildGoogleCalendarUrl({ title, startIso, endIso, description, location, attendees = [] }) {
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: title,
+    dates: `${formatGoogleDate(startIso)}/${formatGoogleDate(endIso)}`,
+    details: description || "",
+    location: location || ""
+  });
+
+  if (attendees.length) {
+    params.set("add", attendees.join(","));
+  }
+
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+function buildShareEmailUrl({ reservation, ownerName, ownerEmail }) {
+  if (!reservation) {
+    return null;
+  }
+  const subject = encodeURIComponent(`Reserva do auditório: ${reservation.descricao}`);
+  const body = encodeURIComponent(
+    [
+      `Reserva registrada com sucesso.`,
+      `Responsável: ${ownerName} (${ownerEmail})`,
+      `Data: ${formatDate(reservation.dataReserva)}`,
+      `Horário: ${reservation.horaInicio} - ${reservation.horaFim}`,
+      `Título: ${reservation.descricao}`,
+      `ID: ${reservation.id || "n/d"}`,
+      `Google Calendar: ${reservation.googleCalendarUrl || ""}`
+    ].join("\n")
+  );
+  return `mailto:?subject=${subject}&body=${body}`;
+}
+
+function compareDateStrings(a, b) {
+  return a.localeCompare(b);
+}
+
+function compareTimes(a, b) {
+  return a.localeCompare(b);
+}
+
+function enumerateDates(startDate, endDate) {
+  const dates = [];
+  let cursor = startDate;
+  while (compareDateStrings(cursor, endDate) <= 0) {
+    dates.push(cursor);
+    cursor = addDays(cursor, 1);
+  }
+  return dates;
+}
+
+function enumerateMonthlyDates(startDate, endDate) {
+  const dates = [];
+  const [year, month, day] = startDate.split("-").map(Number);
+  const targetDay = day;
+  let current = new Date(Date.UTC(year, month - 1, day));
+  const limit = new Date(`${endDate}T00:00:00-03:00`);
+  while (current <= limit) {
+    const currentYear = current.getUTCFullYear();
+    const currentMonth = current.getUTCMonth() + 1;
+    const currentDay = current.getUTCDate();
+    if (currentDay !== targetDay) {
+      throw new Error("A recorrência mensal não pode gerar datas inexistentes.");
+    }
+    const dateString = `${String(currentYear).padStart(4, "0")}-${String(currentMonth).padStart(2, "0")}-${String(currentDay).padStart(2, "0")}`;
+    dates.push(dateString);
+    current = new Date(Date.UTC(currentYear, currentMonth, targetDay));
+  }
+  return dates;
+}
+
+function addDays(dateString, amount) {
+  const base = new Date(`${dateString}T00:00:00-03:00`);
+  base.setUTCDate(base.getUTCDate() + amount);
+  return base.toISOString().slice(0, 10);
+}
+
+function weekdayFromDate(dateString) {
+  return new Date(`${dateString}T00:00:00-03:00`).getUTCDay();
+}
+
+function isWorkingDate(dateString) {
+  const weekday = weekdayFromDate(dateString);
+  return weekday >= 1 && weekday <= 5;
 }
 
 function isValidDate(value) {
@@ -468,21 +1069,109 @@ function isValidDate(value) {
 }
 
 function isValidTime(value) {
-  return /^([01]\d|2[0-3]):(00|30)$/.test(value);
+  return /^(0[8-9]|1[0-6]|17):(00|30)$/.test(value);
 }
 
-function isWorkingHour(hora) {
-  if (!isValidTime(hora)) {
+function isWorkingTime(value) {
+  if (!isValidTime(value)) {
     return false;
   }
-  const [h, m] = hora.split(":").map(Number);
-  if (h < 8 || h > 17) {
-    return false;
+  return value !== "17:30";
+}
+
+function buildLocalIso(date, time) {
+  return new Date(`${date}T${time}:00-03:00`).toISOString();
+}
+
+function intervalsOverlap(startA, endA, startB, endB) {
+  return startA < endB && endA > startB;
+}
+
+function formatDate(value) {
+  if (!value) {
+    return "";
   }
-  if (h === 17 && m !== 0) {
-    return false;
+  const [year, month, day] = value.split("-");
+  return `${day}/${month}/${year}`;
+}
+
+function formatDateTime(iso) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: TIMEZONE,
+    dateStyle: "short",
+    timeStyle: "short"
+  }).format(new Date(iso));
+}
+
+function formatDateInTimezone(iso) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date(iso));
+  const year = parts.find((part) => part.type === "year")?.value || "";
+  const month = parts.find((part) => part.type === "month")?.value || "";
+  const day = parts.find((part) => part.type === "day")?.value || "";
+  return `${year}-${month}-${day}`;
+}
+
+function formatTimeInTimezone(iso) {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: TIMEZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(new Date(iso));
+}
+
+function formatGoogleDate(isoDate) {
+  return new Date(isoDate).toISOString().replace(/[-:]/g, "").replace(".000", "");
+}
+
+function normalizeText(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeRecurrencePattern(value) {
+  const normalized = normalizeText(value).toLowerCase();
+  if (["single", "daily", "weekly", "monthly"].includes(normalized)) {
+    return normalized;
   }
-  return true;
+  return "single";
+}
+
+function parseWeekdays(value) {
+  const items = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(",")
+      : [];
+  return [...new Set(items.map((item) => Number(item)).filter((item) => Number.isInteger(item) && item >= 0 && item <= 6))].sort((a, b) => a - b);
+}
+
+function parseEmailList(value) {
+  const items = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/[,\n;]/g)
+      : [];
+  return [...new Set(items.map((item) => normalizeText(item).toLowerCase()).filter(isValidEmail))];
+}
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function safeJsonParse(value, fallback) {
+  if (!value) {
+    return fallback;
+  }
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
 }
 
 async function parseJsonBody(request) {
@@ -498,25 +1187,29 @@ function jsonResponse(data, status = 200, headers = {}) {
     status,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      ...headers
+      ...Object.fromEntries(headers.entries ? headers.entries() : Object.entries(headers))
     }
   });
 }
 
-function jsonError(message, status) {
-  return jsonResponse({ error: message }, status);
+function jsonError(message, status = 400, headers = {}) {
+  return jsonResponse({ error: message }, status, headers);
 }
 
-async function buildSessionCookie(payload, sessionSecret) {
+async function buildSessionCookie(payload, sessionSecret, request) {
   const exp = Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS;
   const completePayload = { ...payload, exp };
   const encodedPayload = toBase64Url(JSON.stringify(completePayload));
   const signature = await hmacSign(encodedPayload, sessionSecret);
-  return `${SESSION_COOKIE}=${encodedPayload}.${signature}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}`;
+  return `${SESSION_COOKIE}=${encodedPayload}.${signature}; Path=/; HttpOnly; ${cookieSecureFlag(request)} SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}`;
 }
 
-function clearSessionCookie() {
-  return `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
+function clearSessionCookie(request) {
+  return `${SESSION_COOKIE}=; Path=/; HttpOnly; ${cookieSecureFlag(request)} SameSite=Lax; Max-Age=0`;
+}
+
+function cookieSecureFlag(request) {
+  return request.url.startsWith("https:") ? "Secure; " : "";
 }
 
 async function getSessionFromRequest(request, env) {
@@ -558,16 +1251,14 @@ async function getSessionFromRequest(request, env) {
 function parseCookies(cookieHeader) {
   return cookieHeader
     .split(";")
-    .map((v) => v.trim())
+    .map((value) => value.trim())
     .filter(Boolean)
     .reduce((acc, item) => {
-      const idx = item.indexOf("=");
-      if (idx <= 0) {
+      const index = item.indexOf("=");
+      if (index <= 0) {
         return acc;
       }
-      const key = item.slice(0, idx);
-      const value = item.slice(idx + 1);
-      acc[key] = value;
+      acc[item.slice(0, index)] = item.slice(index + 1);
       return acc;
     }, {});
 }
@@ -587,7 +1278,7 @@ function fromBase64Url(input) {
   const padded = normalized + "=".repeat(padLength);
   try {
     const binary = atob(padded);
-    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
     return new TextDecoder().decode(bytes);
   } catch {
     return null;
@@ -612,9 +1303,7 @@ async function hmacSign(value, secret) {
 
 function toHex(arrayBuffer) {
   const bytes = new Uint8Array(arrayBuffer);
-  return Array.from(bytes)
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
+  return Array.from(bytes).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function timingSafeEqual(a, b) {
@@ -633,10 +1322,13 @@ async function validateGoogleIdToken(idToken, expectedClientId) {
   if (!response.ok) {
     return null;
   }
+
   const data = await response.json();
-  if (data.aud !== expectedClientId || data.email_verified !== "true") {
+  const issuerValid = data.iss === "accounts.google.com" || data.iss === "https://accounts.google.com";
+  if (data.aud !== expectedClientId || data.email_verified !== "true" || !issuerValid) {
     return null;
   }
+
   return {
     sub: data.sub,
     email: data.email,
@@ -645,59 +1337,36 @@ async function validateGoogleIdToken(idToken, expectedClientId) {
 }
 
 async function sha256Hex(value) {
-  const hash = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(value)
-  );
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return toHex(hash);
-}
-
-function buildGoogleCalendarUrl({ title, startIso, endIso, description, location }) {
-  const start = formatGoogleDate(startIso);
-  const end = formatGoogleDate(endIso);
-  const params = new URLSearchParams({
-    action: "TEMPLATE",
-    text: title,
-    dates: `${start}/${end}`,
-    details: description || "",
-    location: location || ""
-  });
-  return `https://calendar.google.com/calendar/render?${params.toString()}`;
-}
-
-function formatGoogleDate(isoDate) {
-  return new Date(isoDate).toISOString().replace(/[-:]/g, "").replace(".000", "");
-}
-
-function getClientIp(request) {
-  return request.headers.get("CF-Connecting-IP") || "unknown";
 }
 
 async function checkAdminRateLimit(request, env) {
   if (!env.ADMIN_LOGIN_KV) {
     return false;
   }
+
   const key = `admin-login:${getClientIp(request)}`;
   const recordRaw = await env.ADMIN_LOGIN_KV.get(key);
   if (!recordRaw) {
     return false;
   }
+
   const record = JSON.parse(recordRaw);
-  const now = Date.now();
-  return record.blockedUntil && record.blockedUntil > now;
+  return Boolean(record.blockedUntil && record.blockedUntil > Date.now());
 }
 
 async function registerAdminLoginFailure(request, env) {
   if (!env.ADMIN_LOGIN_KV) {
     return;
   }
+
   const key = `admin-login:${getClientIp(request)}`;
-  const now = Date.now();
   const recordRaw = await env.ADMIN_LOGIN_KV.get(key);
   const record = recordRaw ? JSON.parse(recordRaw) : { count: 0, blockedUntil: 0 };
   record.count += 1;
   if (record.count >= 5) {
-    record.blockedUntil = now + 15 * 60 * 1000;
+    record.blockedUntil = Date.now() + 15 * 60 * 1000;
     record.count = 0;
   }
   await env.ADMIN_LOGIN_KV.put(key, JSON.stringify(record), { expirationTtl: 15 * 60 });
@@ -707,6 +1376,9 @@ async function clearAdminRateLimit(request, env) {
   if (!env.ADMIN_LOGIN_KV) {
     return;
   }
-  const key = `admin-login:${getClientIp(request)}`;
-  await env.ADMIN_LOGIN_KV.delete(key);
+  await env.ADMIN_LOGIN_KV.delete(`admin-login:${getClientIp(request)}`);
+}
+
+function getClientIp(request) {
+  return request.headers.get("CF-Connecting-IP") || "unknown";
 }

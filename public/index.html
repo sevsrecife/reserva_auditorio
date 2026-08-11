@@ -4,216 +4,288 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Reserva de Auditório - SEVS</title>
-
+  <meta name="theme-color" content="#db6605">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="container text-center mt-4">
-    <h2>📅 Reserva de Auditório - SEVS</h2>
-    <div id="user-info" class="mt-3 mb-4">
-      <button id="loginBtn" class="btn btn-orange me-2">Login</button>
-      <button id="logoutBtn" class="btn btn-outline-danger d-none">Sair</button>
-      <span id="userName" class="fw-bold"></span>
-      <div id="googleSignInContainer" class="mt-3 d-none"></div>
+  <header class="site-header border-bottom">
+    <div class="container py-4">
+      <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+        <div>
+          <p class="eyebrow mb-1">SEVS Recife</p>
+          <h1 class="h3 mb-1">Reserva de Auditório</h1>
+          <p class="text-muted mb-0">Agenda segura com autenticação Google, recorrência e administração restrita.</p>
+        </div>
+
+        <div class="auth-box shadow-sm">
+          <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+            <div>
+              <div class="small text-muted">Sessão atual</div>
+              <div id="authIdentity" class="fw-semibold">Não autenticado</div>
+              <div id="authEmail" class="small text-muted"></div>
+            </div>
+            <span id="authRoleBadge" class="badge text-bg-secondary">Visitante</span>
+          </div>
+          <div class="d-flex flex-wrap gap-2 mt-3">
+            <button id="loginBtn" type="button" class="btn btn-orange">Entrar com Google</button>
+            <button id="logoutBtn" type="button" class="btn btn-outline-danger d-none">Sair</button>
+            <button id="toggleAdminAreaBtn" type="button" class="btn btn-outline-secondary">Administração</button>
+          </div>
+          <div id="googleSignInContainer" class="mt-3 d-none"></div>
+        </div>
+      </div>
     </div>
-  </div>
+  </header>
 
-  <div class="container mb-5">
-    <div id="calendar" class="mb-5"></div>
-    
-    <section>
-      <h3 class="text-center mb-4">Nova Reserva - Auditório</h3>
-      <form id="reservaForm">
-        <div class="row">
-          <div class="col-md-6 mb-3">
-            <label for="nome" class="form-label">Nome Completo</label>
-            <input type="text" class="form-control" id="nome" required>
-          </div>
-          <div class="col-md-6 mb-3">
-            <label for="setor" class="form-label">Setor</label>
-            <input type="text" class="form-control" id="setor" required>
-          </div>
+  <main class="container py-4 py-lg-5">
+    <div id="appFeedback" class="alert d-none" role="alert"></div>
+
+    <section class="mb-5">
+      <div class="section-card">
+        <div class="section-card-header">
+          <h2 class="h5 mb-0">Agenda</h2>
+          <p class="text-muted mb-0">Visualize os horários disponíveis e as reservas já registradas.</p>
         </div>
-
-        <div class="row">
-          <div class="col-md-6 mb-3">
-            <label for="telefone" class="form-label">Telefone</label>
-            <input type="text" class="form-control" id="telefone" required>
-          </div>
-          <div class="col-md-6 mb-3">
-            <label for="email" class="form-label">E-mail</label>
-            <input type="email" class="form-control" id="email" required>
-          </div>
-        </div>
-
-        <div class="mb-3">
-          <label for="descricao" class="form-label">Descrição (máx. 50 caracteres)</label>
-          <input type="text" class="form-control" maxlength="50" id="descricao" required>
-        </div>
-
-        <div class="row">
-          <div class="col-md-6 mb-3">
-            <label for="dataInicio" class="form-label">Data da Reserva (Início)</label>
-            <input type="date" class="form-control" id="dataInicio" required>
-          </div>
-          <div class="col-md-6 mb-3">
-            <label for="dataFim" class="form-label">Data Limite (Para repetição)</label>
-            <input type="date" class="form-control" id="dataFim" required>
-            <div class="form-text">Se não for recorrente, preencha igual à data de início.</div>
-          </div>
-        </div>
-
-        <div class="mb-3 form-check d-none" id="divRecorrencia">
-            <input type="checkbox" class="form-check-input" id="repetirSemanal">
-            <label class="form-check-label" for="repetirSemanal">
-              <strong>Repetir semanalmente</strong> (Cria reservas toda semana até a data limite)
-            </label>
-        </div>
-
-        <div class="row">
-          <div class="col-md-6 mb-3">
-            <label for="inicio" class="form-label">Hora de Início</label>
-            <select class="form-select" id="inicio" required></select>
-          </div>
-          <div class="col-md-6 mb-3">
-            <label for="fim" class="form-label">Hora de Fim</label>
-            <select class="form-select" id="fim" required></select>
-          </div>
-        </div>
-
-        <button type="submit" class="btn btn-orange w-100">Reservar</button>
-      </form>
-      <div id="reservaSucesso" class="alert alert-success mt-3 d-none" role="alert">
-        Reserva criada com sucesso.
-        <a id="googleCalendarLink" href="#" target="_blank" rel="noopener noreferrer" class="alert-link">
-          Adicionar ao Google Agenda
-        </a>
+        <div id="calendar" class="mt-3"></div>
       </div>
     </section>
 
-    <section class="mt-5">
-      <h3 class="text-center mb-3">Área Administrativa</h3>
-      <div class="text-center mb-3">
-        <button id="toggleAdminAreaBtn" class="btn btn-outline-secondary">Acessar Administração</button>
+    <section class="mb-5">
+      <div class="section-card">
+        <div class="section-card-header">
+          <h2 class="h5 mb-0">Nova reserva</h2>
+          <p class="text-muted mb-0">O usuário autenticado cria apenas as próprias reservas.</p>
+        </div>
+
+        <form id="reservaForm" class="mt-4">
+          <div class="row g-3">
+            <div class="col-lg-6">
+              <label for="nome" class="form-label">Nome do responsável</label>
+              <input type="text" class="form-control" id="nome" required>
+            </div>
+            <div class="col-lg-6">
+              <label for="email" class="form-label">E-mail Google</label>
+              <input type="email" class="form-control" id="email" required readonly>
+            </div>
+            <div class="col-lg-6">
+              <label for="setor" class="form-label">Setor</label>
+              <input type="text" class="form-control" id="setor" required>
+            </div>
+            <div class="col-lg-6">
+              <label for="telefone" class="form-label">Telefone</label>
+              <input type="tel" class="form-control" id="telefone" required>
+            </div>
+            <div class="col-12">
+              <label for="descricao" class="form-label">Título / descrição</label>
+              <input type="text" class="form-control" id="descricao" maxlength="80" required>
+            </div>
+          </div>
+
+          <div class="row g-3 mt-1">
+            <div class="col-md-4">
+              <label for="dataInicio" class="form-label">Data inicial</label>
+              <input type="date" class="form-control" id="dataInicio" required>
+            </div>
+            <div class="col-md-4">
+              <label for="dataFim" class="form-label">Data final da recorrência</label>
+              <input type="date" class="form-control" id="dataFim" required>
+            </div>
+            <div class="col-md-4">
+              <label for="recurrencePattern" class="form-label">Recorrência</label>
+              <select id="recurrencePattern" class="form-select">
+                <option value="single">Reserva única</option>
+                <option value="daily">Diária</option>
+                <option value="weekly">Semanal</option>
+                <option value="monthly">Mensal</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="recurrenceWeekdaysWrap" class="mt-3 d-none">
+            <div class="form-label mb-2">Dias da semana</div>
+            <div class="weekday-grid">
+              <label class="weekday-option"><input type="checkbox" value="1" class="recurrence-weekday"> Segunda</label>
+              <label class="weekday-option"><input type="checkbox" value="2" class="recurrence-weekday"> Terça</label>
+              <label class="weekday-option"><input type="checkbox" value="3" class="recurrence-weekday"> Quarta</label>
+              <label class="weekday-option"><input type="checkbox" value="4" class="recurrence-weekday"> Quinta</label>
+              <label class="weekday-option"><input type="checkbox" value="5" class="recurrence-weekday"> Sexta</label>
+            </div>
+          </div>
+
+          <div class="row g-3 mt-1">
+            <div class="col-md-3">
+              <label for="inicio" class="form-label">Hora inicial</label>
+              <select class="form-select" id="inicio" required></select>
+            </div>
+            <div class="col-md-3">
+              <label for="fim" class="form-label">Hora final</label>
+              <select class="form-select" id="fim" required></select>
+            </div>
+            <div class="col-md-6">
+              <label for="inviteEmails" class="form-label">Convidados (e-mails separados por vírgula)</label>
+              <input type="text" class="form-control" id="inviteEmails" placeholder="ex.: pessoa1@dominio.br, pessoa2@dominio.br">
+            </div>
+          </div>
+
+          <div class="d-grid d-md-flex gap-2 mt-4">
+            <button type="submit" id="submitReservaBtn" class="btn btn-orange btn-lg flex-grow-1">Registrar reserva</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section id="adminPanel" class="section-card d-none">
+      <div class="section-card-header">
+        <h2 class="h5 mb-0">Administração</h2>
+        <p class="text-muted mb-0">Área exclusiva para editar, excluir e importar reservas.</p>
       </div>
 
-      <div id="adminPanel" class="d-none">
-        <form id="adminLoginForm" class="mb-4">
-          <div class="row">
-            <div class="col-md-6 mb-3">
-              <label for="adminUsername" class="form-label">Usuário administrador</label>
-              <input type="text" class="form-control" id="adminUsername" required>
-            </div>
-            <div class="col-md-6 mb-3">
-              <label for="adminPassword" class="form-label">Senha administrativa</label>
-              <input type="password" class="form-control" id="adminPassword" required>
-            </div>
+      <form id="adminLoginForm" class="mt-4">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label for="adminUsername" class="form-label">Usuário administrador</label>
+            <input type="text" class="form-control" id="adminUsername" required>
           </div>
-          <button type="submit" class="btn btn-orange w-100">Entrar como administrador</button>
-        </form>
-
-        <div id="adminArea" class="d-none">
-          <p id="adminStatusText" class="fw-bold"></p>
-
-          <div class="table-responsive mb-4">
-            <table class="table table-bordered table-striped" id="adminReservasTable">
-              <thead>
-                <tr>
-                  <th>Data</th>
-                  <th>Horário</th>
-                  <th>Descrição</th>
-                  <th>Solicitante</th>
-                  <th>Status</th>
-                  <th>Ações</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
+          <div class="col-md-6">
+            <label for="adminPassword" class="form-label">Senha administrativa</label>
+            <input type="password" class="form-control" id="adminPassword" required>
           </div>
+        </div>
+        <div class="d-grid d-md-flex gap-2 mt-3">
+          <button type="submit" class="btn btn-dark btn-lg flex-grow-1">Entrar como administrador</button>
+        </div>
+      </form>
 
-          <form id="adminEditForm">
-            <h5>Editar reserva selecionada</h5>
-            <input type="hidden" id="adminEditId">
-            <div class="row">
-              <div class="col-md-6 mb-3">
-                <label for="adminEditNome" class="form-label">Nome Completo</label>
-                <input type="text" class="form-control" id="adminEditNome" required>
-              </div>
-              <div class="col-md-6 mb-3">
-                <label for="adminEditSetor" class="form-label">Setor</label>
-                <input type="text" class="form-control" id="adminEditSetor" required>
-              </div>
+      <div id="adminArea" class="d-none mt-4">
+        <div class="d-flex flex-column flex-md-row justify-content-between gap-2 mb-3">
+          <div>
+            <strong id="adminStatusText"></strong>
+            <div class="text-muted small">O administrador pode editar e excluir qualquer reserva, mas não criar novas.</div>
+          </div>
+        </div>
+
+        <div class="table-responsive mb-4">
+          <table class="table table-sm table-striped align-middle" id="adminReservasTable">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Horário</th>
+                <th>Descrição</th>
+                <th>Responsável</th>
+                <th>Contato</th>
+                <th>Origem</th>
+                <th>Status</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <form id="adminEditForm" class="border-top pt-4">
+          <h3 class="h6 mb-3">Editar reserva selecionada</h3>
+          <input type="hidden" id="adminEditId">
+          <input type="hidden" id="adminEditSeriesId">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label for="adminEditNome" class="form-label">Nome</label>
+              <input type="text" class="form-control" id="adminEditNome" required>
             </div>
-            <div class="row">
-              <div class="col-md-6 mb-3">
-                <label for="adminEditTelefone" class="form-label">Telefone</label>
-                <input type="text" class="form-control" id="adminEditTelefone" required>
-              </div>
-              <div class="col-md-6 mb-3">
-                <label for="adminEditEmail" class="form-label">E-mail</label>
-                <input type="email" class="form-control" id="adminEditEmail" required>
-              </div>
+            <div class="col-md-4">
+              <label for="adminEditEmail" class="form-label">E-mail</label>
+              <input type="email" class="form-control" id="adminEditEmail" required>
             </div>
-            <div class="mb-3">
-              <label for="adminEditDescricao" class="form-label">Descrição</label>
-              <input type="text" maxlength="50" class="form-control" id="adminEditDescricao" required>
+            <div class="col-md-4">
+              <label for="adminEditSetor" class="form-label">Setor</label>
+              <input type="text" class="form-control" id="adminEditSetor" required>
             </div>
-            <div class="row">
-              <div class="col-md-4 mb-3">
-                <label for="adminEditData" class="form-label">Data</label>
-                <input type="date" class="form-control" id="adminEditData" required>
-              </div>
-              <div class="col-md-4 mb-3">
-                <label for="adminEditInicio" class="form-label">Início</label>
-                <select class="form-select" id="adminEditInicio" required></select>
-              </div>
-              <div class="col-md-4 mb-3">
-                <label for="adminEditFim" class="form-label">Fim</label>
-                <select class="form-select" id="adminEditFim" required></select>
-              </div>
+            <div class="col-md-4">
+              <label for="adminEditTelefone" class="form-label">Telefone</label>
+              <input type="tel" class="form-control" id="adminEditTelefone" required>
             </div>
-            <div class="mb-3">
+            <div class="col-md-8">
+              <label for="adminEditDescricao" class="form-label">Título / descrição</label>
+              <input type="text" class="form-control" id="adminEditDescricao" required>
+            </div>
+            <div class="col-md-4">
+              <label for="adminEditData" class="form-label">Data</label>
+              <input type="date" class="form-control" id="adminEditData" required>
+            </div>
+            <div class="col-md-4">
+              <label for="adminEditInicio" class="form-label">Início</label>
+              <select class="form-select" id="adminEditInicio" required></select>
+            </div>
+            <div class="col-md-4">
+              <label for="adminEditFim" class="form-label">Fim</label>
+              <select class="form-select" id="adminEditFim" required></select>
+            </div>
+            <div class="col-md-4">
               <label for="adminEditStatus" class="form-label">Status</label>
               <select class="form-select" id="adminEditStatus">
                 <option value="ativa">Ativa</option>
                 <option value="cancelada">Cancelada</option>
               </select>
             </div>
-            <button type="submit" class="btn btn-orange w-100">Salvar alteração</button>
-          </form>
-        </div>
+          </div>
+          <div class="d-grid d-md-flex gap-2 mt-3">
+            <button type="submit" class="btn btn-orange btn-lg flex-grow-1">Salvar alteração</button>
+          </div>
+        </form>
       </div>
     </section>
-  </div>
+  </main>
 
-  <div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-labelledby="confirmDeleteModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
+  <div class="modal fade" id="reservationSuccessModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title" id="confirmDeleteModalLabel">Detalhes da Reserva</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          <h5 class="modal-title">Reserva confirmada</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
         </div>
         <div class="modal-body">
-          <pre id="modal-reserva-detalhes"></pre>
+          <div id="reservationSuccessBody" class="vstack gap-2"></div>
         </div>
-        <div class="modal-footer" id="modalDeleteActions">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Não Excluir</button>
-          <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Excluir</button>
+        <div class="modal-footer flex-wrap">
+          <a id="successCalendarLink" class="btn btn-orange" target="_blank" rel="noopener noreferrer">Google Calendar</a>
+          <a id="successEmailLink" class="btn btn-outline-primary" target="_blank" rel="noopener noreferrer">Compartilhar por e-mail</a>
+          <button type="button" id="copyReservationBtn" class="btn btn-outline-secondary">Copiar detalhes</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
         </div>
       </div>
     </div>
   </div>
 
+  <div class="modal fade" id="reservationDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Detalhes da reserva</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div id="reservationDetailBody" class="vstack gap-2"></div>
+        </div>
+        <div class="modal-footer flex-wrap">
+          <a id="detailCalendarLink" class="btn btn-orange" target="_blank" rel="noopener noreferrer">Google Calendar</a>
+          <a id="detailEmailLink" class="btn btn-outline-primary" target="_blank" rel="noopener noreferrer">Compartilhar por e-mail</a>
+          <button type="button" id="detailDeleteBtn" class="btn btn-danger d-none">Excluir</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="runtime-config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script type="module" src="app.js"></script>
-  
-  <footer class="bg-body-tertiary text-center py-2 mt-4">
-    <div class="text-center" style="background-color: rgba(0, 0, 0, 0.05);">
-      Desenvolvido por: Núcleo de Transformação Digital (NTD) / SEVS RECIFE
+
+  <footer class="site-footer text-center py-3 mt-4">
+    <div class="container small text-muted">
+      Desenvolvido por Núcleo de Transformação Digital (NTD) / SEVS Recife
     </div>
   </footer>
 </body>
