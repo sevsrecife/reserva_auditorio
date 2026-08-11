@@ -255,11 +255,6 @@ async function handleLogoutClick() {
 }
 
 async function loadReservas() {
-  if (!state.currentSession?.authenticated) {
-    state.calendar?.removeAllEvents();
-    return;
-  }
-
   const data = await apiFetch("/api/reservas");
   state.lastLoadedReservas = data.reservas || [];
 

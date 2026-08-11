@@ -151,10 +151,6 @@ async function handleApi(request, env, url) {
   }
 
   if (url.pathname === "/api/reservas" && method === "GET") {
-    if (!session) {
-      return jsonError("Usuário não autenticado.", 401, cors);
-    }
-
     const rows = await env.RESERVAS_DB.prepare(
       `SELECT *
        FROM reservations
@@ -162,7 +158,12 @@ async function handleApi(request, env, url) {
        ORDER BY inicio_iso ASC`
     ).all();
 
-    const reservations = (rows.results || []).map((row) => serializeReservation(row, session, session.role === ADMIN_ROLE));
+    const reservations = (rows.results || []).map((row) => {
+      if (!session) {
+        return serializePublicReservation(row);
+      }
+      return serializeReservation(row, session, session.role === ADMIN_ROLE);
+    });
     return jsonResponse({ reservas: reservations }, 200, cors);
   }
 
@@ -612,6 +613,29 @@ function serializeReservation(row, session, isAdmin) {
   }
 
   return base;
+}
+
+function serializePublicReservation(row) {
+  return {
+    id: row.id,
+    descricao: row.descricao,
+    dataReserva: row.data_reserva,
+    horaInicio: row.hora_inicio,
+    horaFim: row.hora_fim,
+    inicioIso: row.inicio_iso,
+    fimIso: row.fim_iso,
+    status: row.status,
+    isImported: Boolean(row.is_imported),
+    sourceOrigin: row.source_origin,
+    recurrencePattern: row.recurrence_pattern,
+    recurrenceSeriesId: row.recurrence_series_id,
+    recurrenceOccurrence: row.recurrence_occurrence,
+    recurrenceUntil: row.recurrence_until,
+    recurrenceWeekdays: safeJsonParse(row.recurrence_weekdays_json, []),
+    ownerName: row.owner_name,
+    canDelete: false,
+    canEdit: false
+  };
 }
 
 function normalizeReservationBody(body, options = {}) {
