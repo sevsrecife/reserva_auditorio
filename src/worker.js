@@ -1201,15 +1201,19 @@ async function buildSessionCookie(payload, sessionSecret, request) {
   const completePayload = { ...payload, exp };
   const encodedPayload = toBase64Url(JSON.stringify(completePayload));
   const signature = await hmacSign(encodedPayload, sessionSecret);
-  return `${SESSION_COOKIE}=${encodedPayload}.${signature}; Path=/; HttpOnly; ${cookieSecureFlag(request)} SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}`;
+  return `${SESSION_COOKIE}=${encodedPayload}.${signature}; Path=/; HttpOnly; ${cookieSecureFlag(request)} SameSite=${cookieSameSite(request)}; Max-Age=${SESSION_TTL_SECONDS}`;
 }
 
 function clearSessionCookie(request) {
-  return `${SESSION_COOKIE}=; Path=/; HttpOnly; ${cookieSecureFlag(request)} SameSite=Lax; Max-Age=0`;
+  return `${SESSION_COOKIE}=; Path=/; HttpOnly; ${cookieSecureFlag(request)} SameSite=${cookieSameSite(request)}; Max-Age=0`;
 }
 
 function cookieSecureFlag(request) {
   return request.url.startsWith("https:") ? "Secure; " : "";
+}
+
+function cookieSameSite(request) {
+  return request.url.startsWith("https:") ? "None" : "Lax";
 }
 
 async function getSessionFromRequest(request, env) {
