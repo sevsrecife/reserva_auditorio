@@ -93,10 +93,7 @@ async function handleApi(request, env, url) {
     return jsonResponse(
       { message: "Login realizado com sucesso." },
       200,
-      {
-        ...cors,
-        "Set-Cookie": await buildSessionCookie(payload, env.SESSION_SECRET, request)
-      }
+      withSetCookie(cors, await buildSessionCookie(payload, env.SESSION_SECRET, request))
     );
   }
 
@@ -141,10 +138,7 @@ async function handleApi(request, env, url) {
     return jsonResponse(
       { message: "Login administrativo realizado com sucesso." },
       200,
-      {
-        ...cors,
-        "Set-Cookie": await buildSessionCookie(payload, env.SESSION_SECRET, request)
-      }
+      withSetCookie(cors, await buildSessionCookie(payload, env.SESSION_SECRET, request))
     );
   }
 
@@ -152,10 +146,7 @@ async function handleApi(request, env, url) {
     return jsonResponse(
       { message: "Logout realizado." },
       200,
-      {
-        ...cors,
-        "Set-Cookie": clearSessionCookie(request)
-      }
+      withSetCookie(cors, clearSessionCookie(request))
     );
   }
 
@@ -485,6 +476,12 @@ function buildCorsHeaders(origin, env, requestedHeaders = "Content-Type, Authori
     headers.set("Access-Control-Max-Age", "86400");
     headers.append("Vary", "Origin");
   }
+  return headers;
+}
+
+function withSetCookie(baseHeaders, setCookieValue) {
+  const headers = new Headers(baseHeaders);
+  headers.set("Set-Cookie", setCookieValue);
   return headers;
 }
 
