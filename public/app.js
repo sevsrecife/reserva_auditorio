@@ -193,8 +193,7 @@ function setupGoogleIdentity() {
           body: JSON.stringify({ idToken: response.credential })
         });
         showFeedback("Login com Google realizado com sucesso.", "success");
-        await refreshSession();
-        await loadReservas();
+        await syncAfterGoogleLogin();
         els.googleSignInContainer.classList.add("d-none");
       } catch (error) {
         console.error(error);
@@ -213,6 +212,29 @@ function setupGoogleIdentity() {
   });
 
   state.googleInitialized = true;
+}
+
+async function syncAfterGoogleLogin() {
+  let lastError = null;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      await refreshSession();
+      await loadReservas();
+      return;
+    } catch (error) {
+      lastError = error;
+      await wait(attempt * 250);
+    }
+  }
+
+  showFeedback(
+    "Login concluído, mas houve instabilidade ao atualizar a sessão. Recarregue a página se necessário.",
+    "warning",
+    true
+  );
+  if (lastError) {
+    console.error(lastError);
+  }
 }
 
 async function handleLogoutClick() {
@@ -793,4 +815,10 @@ function buildApiUrl(path) {
     return path;
   }
   return `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+function wait(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 }
