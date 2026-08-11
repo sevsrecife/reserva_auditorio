@@ -1,0 +1,5 @@
+SESSION_SECRET=change-this-long-random-secret
+GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD_SALT=change-this-random-salt
+ADMIN_PASSWORD_HASH=sha256_of_password_plus_salt
