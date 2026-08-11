@@ -11,6 +11,16 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <div id="startupNoticeOverlay" class="startup-notice-overlay" role="dialog" aria-modal="true" aria-labelledby="startupNoticeTitle">
+    <div class="startup-notice-card">
+      <h2 id="startupNoticeTitle" class="h5 mb-3">Aviso importante</h2>
+      <p class="mb-2"><strong>Fizemos melhorias na agenda, agora ela está com um visual atualizado.</strong></p>
+      <p class="mb-2">Temos um acesso administrativo que permite gerenciar agendas criadas por outros usuários (consulte o núcleo para saber mais).</p>
+      <p class="mb-3">Agora é possível compartilhar a reserva na sua agenda Google e enviar por e-mail.</p>
+      <button id="startupNoticeOkBtn" type="button" class="btn btn-orange w-100">OK</button>
+    </div>
+  </div>
+
   <header class="site-header border-bottom">
     <div class="container py-4">
       <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
@@ -40,7 +50,7 @@
     </div>
   </header>
 
-  <main class="container py-4 py-lg-5">
+  <main id="mainContent" class="container py-4 py-lg-5">
     <div id="appFeedback" class="alert d-none" role="alert"></div>
 
     <section class="mb-5">
