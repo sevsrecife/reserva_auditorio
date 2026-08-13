@@ -198,6 +198,10 @@ async function handleApi(request, env, url) {
       return jsonError(normalized.message, 400, cors);
     }
 
+    if (normalized.recurrencePattern !== "single") {
+      return jsonError("Usuários autenticados só podem criar reservas únicas. Reservas recorrentes são exclusivas do administrador.", 403, cors);
+    }
+
     let occurrenceDates;
     try {
       occurrenceDates = generateOccurrenceDates(normalized);

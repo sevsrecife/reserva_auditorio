@@ -17,8 +17,8 @@
       <p class="mb-3">Informamos que a Agenda de Auditórios passou por melhorias importantes:</p>
       <ol class="mb-3 ps-3">
         <li><strong>Visual Reformulado:</strong> Layout atualizado para otimizar o uso.</li>
-        <li><strong>Integração:</strong> Compartilhe agendamentos e sincronize diretamente com o <strong>Google Agenda</strong>.</li>
-        <li><strong>Perfil Administrador:</strong> Permissão para gerenciar agendamentos de terceiros (<em>solicite mais informações junto ao Núcleo</em>).</li>
+        <li><strong>Integração:</strong> Compartilhe agendamentos diretamente com o <strong>Google Agenda</strong>.</li>
+        <li><strong>Perfil Administrador:</strong> Permissão para gerenciar agendamentos de terceiros e agendamentos recorrentes. (<em>solicite mais informações junto ao Núcleo</em>).</li>
       </ol>
       <button id="startupNoticeOkBtn" type="button" class="btn btn-orange w-100">OK</button>
     </div>
@@ -102,11 +102,11 @@
               <label for="dataInicio" class="form-label">Data inicial</label>
               <input type="date" class="form-control" id="dataInicio" required>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-4" id="dataFimGroup">
               <label for="dataFim" class="form-label">Data final da recorrência</label>
               <input type="date" class="form-control" id="dataFim" required>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-4" id="recurrencePatternGroup">
               <label for="recurrencePattern" class="form-label">Recorrência</label>
               <select id="recurrencePattern" class="form-select">
                 <option value="single">Reserva única</option>

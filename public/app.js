@@ -184,6 +184,16 @@ function syncSessionUi() {
     ? "Administrador não pode criar reservas"
     : "Registrar reserva";
 
+  // Usuários comuns só podem fazer reserva única; campos de recorrência ficam ocultos
+  const recurrenceFieldsVisible = isAdmin || !isAuthenticated;
+  document.getElementById("dataFimGroup").classList.toggle("d-none", !recurrenceFieldsVisible);
+  document.getElementById("recurrencePatternGroup").classList.toggle("d-none", !recurrenceFieldsVisible);
+  els.recurrenceWeekdaysWrap.classList.add("d-none");
+  if (!recurrenceFieldsVisible) {
+    els.recurrencePattern.value = "single";
+    syncSingleDateEnd();
+  }
+
   if (isAdmin) {
     els.adminPanel.classList.remove("d-none");
   }
@@ -488,6 +498,8 @@ function buildReservaPayload() {
   const email = document.getElementById("email").value.trim();
   const descricao = document.getElementById("descricao").value.trim();
   const recurrencePattern = els.recurrencePattern.value;
+  // Usuários comuns só podem criar reserva única; ignora qualquer valor diferente
+  const effectivePattern = (state.currentSession?.role === "admin") ? recurrencePattern : "single";
 
   if (!dataInicio || !dataFim || !horaInicio || !horaFim || !nome || !setor || !telefone || !email || !descricao) {
     showFeedback("Preencha todos os campos obrigatórios.", "warning");
@@ -499,7 +511,7 @@ function buildReservaPayload() {
     return null;
   }
 
-  const recurrenceWeekdays = recurrencePattern === "weekly"
+  const recurrenceWeekdays = effectivePattern === "weekly"
     ? els.recurrenceWeekdays.filter((checkbox) => checkbox.checked).map((checkbox) => Number(checkbox.value))
     : [];
 
@@ -513,7 +525,7 @@ function buildReservaPayload() {
     dataFim,
     horaInicio,
     horaFim,
-    recurrencePattern,
+    recurrencePattern: effectivePattern,
     recurrenceWeekdays
   };
 }
