@@ -70,7 +70,7 @@
       <div class="section-card">
         <div class="section-card-header">
           <h2 class="h5 mb-0">Nova reserva</h2>
-          <p class="text-muted mb-0">O usuário autenticado cria apenas as próprias reservas.</p>
+          <p class="text-muted mb-0">Usuários comuns criam apenas reservas únicas em seu próprio nome. Administradores podem criar reservas únicas ou recorrentes em nome de terceiros.</p>
         </div>
 
         <form id="reservaForm" class="mt-4">
@@ -172,9 +172,42 @@
         <div class="d-flex flex-column flex-md-row justify-content-between gap-2 mb-3">
           <div>
             <strong id="adminStatusText"></strong>
-            <div class="text-muted small">O administrador pode editar e excluir qualquer reserva, mas não criar novas.</div>
+            <div class="text-muted small">O administrador pode criar, editar e excluir qualquer reserva, incluindo reservas de terceiros e recorrentes.</div>
           </div>
         </div>
+
+        <form id="adminFilterForm" class="border rounded-3 p-3 mb-3 bg-light-subtle">
+          <div class="row g-3 align-items-end">
+            <div class="col-md-3 col-6">
+              <label for="adminFilterDataInicio" class="form-label small mb-1">Data (de)</label>
+              <input type="date" class="form-control form-control-sm" id="adminFilterDataInicio">
+            </div>
+            <div class="col-md-3 col-6">
+              <label for="adminFilterDataFim" class="form-label small mb-1">Data (até)</label>
+              <input type="date" class="form-control form-control-sm" id="adminFilterDataFim">
+            </div>
+            <div class="col-md-2 col-6">
+              <label for="adminFilterHorario" class="form-label small mb-1">Horário</label>
+              <input type="time" class="form-control form-control-sm" id="adminFilterHorario">
+            </div>
+            <div class="col-md-2 col-6">
+              <label for="adminFilterDescricao" class="form-label small mb-1">Descrição</label>
+              <input type="text" class="form-control form-control-sm" id="adminFilterDescricao" placeholder="Parte da descrição">
+            </div>
+            <div class="col-md-1 col-6">
+              <label for="adminFilterResponsavel" class="form-label small mb-1">Responsável</label>
+              <input type="text" class="form-control form-control-sm" id="adminFilterResponsavel" placeholder="Nome">
+            </div>
+            <div class="col-md-1 col-6">
+              <label for="adminFilterContato" class="form-label small mb-1">Contato</label>
+              <input type="text" class="form-control form-control-sm" id="adminFilterContato" placeholder="E-mail/telefone">
+            </div>
+          </div>
+          <div class="d-flex justify-content-between align-items-center mt-3">
+            <div id="adminFilterSummary" class="small text-muted"></div>
+            <button type="button" id="adminFilterClearBtn" class="btn btn-sm btn-outline-secondary">Limpar filtros</button>
+          </div>
+        </form>
 
         <div class="table-responsive mb-4">
           <table class="table table-sm table-striped align-middle" id="adminReservasTable">
