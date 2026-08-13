@@ -246,11 +246,10 @@ async function handleApi(request, env, url) {
             ownerName: session.name,
             ownerEmail: session.email,
             setor: normalized.setor,
-            telefone: normalized.telefone,
-            inviteEmails: normalized.inviteEmails
+            telefone: normalized.telefone
           }),
           location: "Auditório",
-          attendees: normalized.inviteEmails
+          attendees: []
         }),
         createdAt: nowIso,
         updatedAt: nowIso,
@@ -642,7 +641,6 @@ function normalizeReservationBody(body, options = {}) {
   const status = normalizeText(body?.status || "ativa") || "ativa";
   const recurrencePattern = normalizeRecurrencePattern(body?.recurrencePattern || body?.recurrence?.pattern || "single");
   const recurrenceWeekdays = parseWeekdays(body?.recurrenceWeekdays || body?.recurrence?.weekdays || []);
-  const inviteEmails = parseEmailList(body?.inviteEmails || body?.convidados || "");
 
   if (!nome || !setor || !telefone || !emailContato || !descricao || !dataReserva || !horaInicio || !horaFim) {
     return { valid: false, message: "Dados obrigatórios ausentes para a reserva." };
@@ -702,8 +700,7 @@ function normalizeReservationBody(body, options = {}) {
     status,
     recurrencePattern,
     recurrenceWeekdays: normalizedWeekdays,
-    recurrenceUntil: recurrencePattern === "single" ? null : dataFim,
-    inviteEmails
+    recurrenceUntil: recurrencePattern === "single" ? null : dataFim
   };
 }
 
@@ -818,16 +815,13 @@ function reservationBusinessView(row) {
   };
 }
 
-function buildReservationDescription({ descricao, ownerName, ownerEmail, setor, telefone, inviteEmails }) {
+function buildReservationDescription({ descricao, ownerName, ownerEmail, setor, telefone }) {
   const lines = [
     descricao,
     `Responsável: ${ownerName} (${ownerEmail})`,
     `Setor: ${setor}`,
     `Telefone: ${telefone}`
   ];
-  if (inviteEmails.length) {
-    lines.push(`Convidados: ${inviteEmails.join(", ")}`);
-  }
   return lines.join("\n");
 }
 
@@ -984,15 +978,6 @@ function parseWeekdays(value) {
       ? value.split(",")
       : [];
   return [...new Set(items.map((item) => Number(item)).filter((item) => Number.isInteger(item) && item >= 0 && item <= 6))].sort((a, b) => a - b);
-}
-
-function parseEmailList(value) {
-  const items = Array.isArray(value)
-    ? value
-    : typeof value === "string"
-      ? value.split(/[,\n;]/g)
-      : [];
-  return [...new Set(items.map((item) => normalizeText(item).toLowerCase()).filter(isValidEmail))];
 }
 
 function isValidEmail(email) {

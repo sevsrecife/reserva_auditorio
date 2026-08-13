@@ -487,7 +487,6 @@ function buildReservaPayload() {
   const telefone = document.getElementById("telefone").value.trim();
   const email = document.getElementById("email").value.trim();
   const descricao = document.getElementById("descricao").value.trim();
-  const inviteEmails = document.getElementById("inviteEmails").value.trim();
   const recurrencePattern = els.recurrencePattern.value;
 
   if (!dataInicio || !dataFim || !horaInicio || !horaFim || !nome || !setor || !telefone || !email || !descricao) {
@@ -515,8 +514,7 @@ function buildReservaPayload() {
     horaInicio,
     horaFim,
     recurrencePattern,
-    recurrenceWeekdays,
-    inviteEmails
+    recurrenceWeekdays
   };
 }
 
@@ -798,10 +796,6 @@ function buildCalendarUrl(reserva) {
     details: `Responsável: ${reserva.ownerName || reserva.nome}\nE-mail: ${reserva.ownerEmail || reserva.emailContato || ""}\nSetor: ${reserva.setor || ""}`,
     location: "Auditório"
   });
-
-  if (Array.isArray(reserva.inviteEmails) && reserva.inviteEmails.length) {
-    params.set("add", reserva.inviteEmails.join(","));
-  }
 
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
