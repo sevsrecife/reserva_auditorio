@@ -13,10 +13,13 @@
 <body>
   <div id="startupNoticeOverlay" class="startup-notice-overlay" role="dialog" aria-modal="true" aria-labelledby="startupNoticeTitle">
     <div class="startup-notice-card">
-      <h2 id="startupNoticeTitle" class="h5 mb-3">Aviso importante</h2>
-      <p class="mb-2"><strong>Fizemos melhorias na agenda, agora ela está com um visual atualizado.</strong></p>
-      <p class="mb-2">Temos um acesso administrativo que permite gerenciar agendas criadas por outros usuários (consulte o núcleo para saber mais).</p>
-      <p class="mb-3">Agora é possível compartilhar a reserva na sua agenda Google e enviar por e-mail.</p>
+      <h2 id="startupNoticeTitle" class="h5 mb-3">Aviso de Atualização do Sistema</h2>
+      <p class="mb-3">Informamos que a Agenda de Auditórios passou por melhorias importantes:</p>
+      <ol class="mb-3 ps-3">
+        <li><strong>Visual Reformulado:</strong> Layout atualizado para otimizar o uso.</li>
+        <li><strong>Integração:</strong> Compartilhe agendamentos via e-mail e sincronize diretamente com o <strong>Google Agenda</strong>.</li>
+        <li><strong>Perfil Administrador:</strong> Permissão para gerenciar agendamentos de terceiros (<em>solicite mais informações junto ao Núcleo</em>).</li>
+      </ol>
       <button id="startupNoticeOkBtn" type="button" class="btn btn-orange w-100">OK</button>
     </div>
   </div>
@@ -27,7 +30,7 @@
         <div>
           <p class="eyebrow mb-1">SEVS Recife</p>
           <h1 class="h3 mb-1">Reserva de Auditório</h1>
-          <p class="text-muted mb-0">Agenda segura com autenticação Google, recorrência e administração restrita.</p>
+          <p class="text-muted mb-0">Sistema de reserva auditório da SEVS.</p>
         </div>
 
         <div class="auth-box shadow-sm">
@@ -150,7 +153,7 @@
     <section id="adminPanel" class="section-card d-none">
       <div class="section-card-header">
         <h2 class="h5 mb-0">Administração</h2>
-        <p class="text-muted mb-0">Área exclusiva para editar, excluir e importar reservas.</p>
+        <p class="text-muted mb-0">Área exclusiva para editar e excluir reservas.</p>
       </div>
 
       <form id="adminLoginForm" class="mt-4">
@@ -283,6 +286,27 @@
           <a id="detailEmailLink" class="btn btn-outline-primary" target="_blank" rel="noopener noreferrer">Compartilhar por e-mail</a>
           <button type="button" id="detailDeleteBtn" class="btn btn-danger d-none">Excluir</button>
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="reservationDeleteScopeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Excluir ocorrência recorrente?</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-danger fw-semibold mb-2">Esta ação é permanente.</p>
+          <p id="reservationDeleteScopeSummary" class="small fw-semibold mb-2"></p>
+          <p id="reservationDeleteScopeText" class="mb-0"></p>
+        </div>
+        <div class="modal-footer flex-wrap">
+          <button type="button" id="deleteSingleOccurrenceBtn" class="btn btn-outline-danger">Excluir só esta ocorrência</button>
+          <button type="button" id="deleteEntireSeriesBtn" class="btn btn-danger">Excluir série inteira</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
         </div>
       </div>
     </div>

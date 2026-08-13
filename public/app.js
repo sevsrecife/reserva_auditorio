@@ -1,5 +1,6 @@
 const appConfig = window.__APP_CONFIG__ || {};
 const API_BASE_URL = String(appConfig.apiBaseUrl || "").replace(/\/$/, "") || window.location.origin;
+const TIMEZONE = "America/Recife";
 
 const els = {
   startupNoticeOverlay: document.getElementById("startupNoticeOverlay"),
@@ -24,6 +25,12 @@ const els = {
   detailCalendarLink: document.getElementById("detailCalendarLink"),
   detailEmailLink: document.getElementById("detailEmailLink"),
   detailDeleteBtn: document.getElementById("detailDeleteBtn"),
+  reservationDeleteScopeModalEl: document.getElementById("reservationDeleteScopeModal"),
+  reservationDeleteScopeModal: new bootstrap.Modal(document.getElementById("reservationDeleteScopeModal")),
+  reservationDeleteScopeSummary: document.getElementById("reservationDeleteScopeSummary"),
+  reservationDeleteScopeText: document.getElementById("reservationDeleteScopeText"),
+  deleteSingleOccurrenceBtn: document.getElementById("deleteSingleOccurrenceBtn"),
+  deleteEntireSeriesBtn: document.getElementById("deleteEntireSeriesBtn"),
   calendarEl: document.getElementById("calendar"),
   adminPanel: document.getElementById("adminPanel"),
   adminLoginForm: document.getElementById("adminLoginForm"),
@@ -45,6 +52,10 @@ const state = {
   googleInitialized: false,
   lastLoadedReservas: [],
   lastSuccessPayload: null,
+  activeReservation: null,
+  pendingDeleteReservation: null,
+  pendingDeleteRoute: "public",
+  restoreDetailAfterDeleteScope: false,
   busy: false
 };
 
@@ -93,6 +104,18 @@ function bindEvents() {
   document.getElementById("dataInicio").addEventListener("change", syncSingleDateEnd);
   els.copyReservationBtn.addEventListener("click", copySuccessDetails);
   els.detailDeleteBtn.addEventListener("click", deleteSelectedReservation);
+  els.deleteSingleOccurrenceBtn.addEventListener("click", () => deletePendingReservation("single"));
+  els.deleteEntireSeriesBtn.addEventListener("click", () => deletePendingReservation("series"));
+  els.reservationDeleteScopeModalEl.addEventListener("hidden.bs.modal", () => {
+    if (state.restoreDetailAfterDeleteScope && state.activeReservation) {
+      els.reservationDetailModal.show();
+    }
+    state.restoreDetailAfterDeleteScope = false;
+    state.pendingDeleteReservation = null;
+    state.pendingDeleteRoute = "public";
+    els.reservationDeleteScopeSummary.textContent = "";
+    els.reservationDeleteScopeText.textContent = "";
+  });
 }
 
 async function loadConfig() {
@@ -107,6 +130,7 @@ function setupCalendar() {
   state.calendar = new FullCalendar.Calendar(els.calendarEl, {
     initialView: "dayGridMonth",
     locale: "pt-br",
+    timeZone: TIMEZONE,
     height: "auto",
     expandRows: true,
     selectable: false,
@@ -290,6 +314,7 @@ async function loadReservas() {
 
 function onEventClick(info) {
   const reserva = info.event.extendedProps;
+  state.activeReservation = reserva;
   const isAdmin = state.currentSession?.role === "admin";
   const canDelete = isAdmin || Boolean(reserva.canDelete);
 
@@ -312,7 +337,7 @@ function renderReservationDetails(reserva, container, isAdmin) {
     ["Data", formatDate(reserva.dataReserva)],
     ["Horário", `${reserva.horaInicio} - ${reserva.horaFim}`],
     ["Status", reserva.status],
-    ["Origem", reserva.isImported ? "Backup importado" : "Manual"],
+    ["Origem", "Manual"],
     ["Recorrência", formatRecurrenceLabel(reserva)]
   ];
 
@@ -328,8 +353,51 @@ function renderReservationDetails(reserva, container, isAdmin) {
 }
 
 async function deleteSelectedReservation() {
-  const reservationId = els.detailDeleteBtn.dataset.reservationId;
-  if (!reservationId) {
+  const reservation = state.activeReservation;
+  if (!reservation) {
+    return;
+  }
+
+  await requestReservationDeletion(reservation, {
+    source: "detail",
+    useAdminRoute: state.currentSession?.role === "admin"
+  });
+}
+
+async function deletePendingReservation(scope) {
+  const reservation = state.pendingDeleteReservation;
+  if (!reservation) {
+    return;
+  }
+
+  state.restoreDetailAfterDeleteScope = false;
+  try {
+    await performReservationDeletion(reservation, scope, {
+      useAdminRoute: state.pendingDeleteRoute === "admin",
+      fromScopeModal: true
+    });
+    els.reservationDeleteScopeModal.hide();
+    if (state.activeReservation?.id === reservation.id) {
+      els.reservationDetailModal.hide();
+    }
+  } catch (error) {
+    console.error(error);
+    showFeedback(error.message || "Falha ao excluir a reserva.", "danger");
+  }
+}
+
+async function requestReservationDeletion(reservation, { source = "detail", useAdminRoute = false } = {}) {
+  const isRecurring = isRecurringReservation(reservation);
+  if (isRecurring) {
+    state.pendingDeleteReservation = reservation;
+    state.pendingDeleteRoute = useAdminRoute ? "admin" : "public";
+    state.restoreDetailAfterDeleteScope = source === "detail";
+    els.reservationDeleteScopeSummary.textContent = `${reservation.descricao} • ${formatDate(reservation.dataReserva)} • ${reservation.horaInicio} - ${reservation.horaFim}`;
+    els.reservationDeleteScopeText.textContent = `Esta reserva é recorrente (${formatRecurrenceLabel(reservation)}). Escolha abaixo se deseja remover apenas esta ocorrência ou toda a série.`;
+    if (source === "detail") {
+      els.reservationDetailModal.hide();
+    }
+    els.reservationDeleteScopeModal.show();
     return;
   }
 
@@ -337,17 +405,34 @@ async function deleteSelectedReservation() {
     return;
   }
 
-  try {
-    await apiFetch(`/api/reservas/${reservationId}`, { method: "DELETE" });
-    els.reservationDetailModal.hide();
-    showFeedback("Reserva excluída com sucesso.", "success");
-    await loadReservas();
-    if (state.currentSession?.role === "admin") {
-      await loadAdminReservas();
+  await performReservationDeletion(reservation, "single", { useAdminRoute });
+}
+
+async function performReservationDeletion(reservation, scope, { useAdminRoute = false, fromScopeModal = false } = {}) {
+  const deleteScope = scope === "series" ? "series" : "single";
+  if (deleteScope === "series") {
+    const confirmed = window.confirm(
+      `Confirme a exclusão da série inteira de "${reservation.descricao}". ` +
+      "Esta ação removerá todas as ocorrências recorrentes e não pode ser desfeita."
+    );
+    if (!confirmed) {
+      return;
     }
-  } catch (error) {
-    console.error(error);
-    showFeedback(error.message || "Falha ao excluir a reserva.", "danger");
+  }
+
+  const path = buildDeleteReservationPath(reservation.id, deleteScope, useAdminRoute);
+  const response = await apiFetch(path, { method: "DELETE" });
+  if (fromScopeModal) {
+    state.pendingDeleteReservation = null;
+    state.pendingDeleteRoute = "public";
+  }
+  els.reservationDeleteScopeSummary.textContent = "";
+  els.reservationDeleteScopeText.textContent = "";
+  els.reservationDetailModal.hide();
+  showFeedback(response.message || (deleteScope === "series" ? "Série excluída com sucesso." : "Reserva excluída com sucesso."), "success");
+  await loadReservas();
+  if (state.currentSession?.role === "admin") {
+    await loadAdminReservas();
   }
 }
 
@@ -542,7 +627,7 @@ async function loadAdminReservas() {
       <td>${escapeHtml(reserva.descricao)}</td>
       <td>${escapeHtml(reserva.ownerName || reserva.nome)}</td>
       <td>${escapeHtml(reserva.ownerEmail || reserva.emailContato)}</td>
-      <td>${escapeHtml(reserva.isImported ? "Backup" : "Manual")}</td>
+      <td>${escapeHtml("Manual")}</td>
       <td>${escapeHtml(reserva.status)}</td>
       <td class="text-nowrap">
         <button type="button" class="btn btn-sm btn-outline-primary me-2" data-action="edit">Editar</button>
@@ -552,14 +637,8 @@ async function loadAdminReservas() {
 
     tr.querySelector('[data-action="edit"]').addEventListener("click", () => fillAdminEditForm(reserva));
     tr.querySelector('[data-action="delete"]').addEventListener("click", async () => {
-      if (!window.confirm("Deseja realmente excluir esta reserva?")) {
-        return;
-      }
       try {
-        await apiFetch(`/api/admin/reservas/${reserva.id}`, { method: "DELETE" });
-        showFeedback("Reserva excluída com sucesso.", "success");
-        await loadAdminReservas();
-        await loadReservas();
+        await requestReservationDeletion(reserva, { source: "admin", useAdminRoute: true });
       } catch (error) {
         console.error(error);
         showFeedback(error.message || "Falha ao excluir reserva.", "danger");
@@ -731,6 +810,16 @@ function buildCalendarUrl(reserva) {
   }
 
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+function buildDeleteReservationPath(reservationId, scope, useAdminRoute) {
+  const basePath = useAdminRoute ? "/api/admin/reservas" : "/api/reservas";
+  const params = scope === "series" ? "?scope=series" : "";
+  return `${basePath}/${reservationId}${params}`;
+}
+
+function isRecurringReservation(reserva) {
+  return Boolean(reserva?.recurrenceSeriesId) && (reserva.recurrencePattern || "single") !== "single";
 }
 
 function buildMailtoUrl(reserva) {

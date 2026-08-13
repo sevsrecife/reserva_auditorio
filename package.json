@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "import:backup": "node scripts/import-backup.mjs",
     "d1:migrate:local": "wrangler d1 migrations apply RESERVAS_DB --local",
     "d1:migrate:remote": "wrangler d1 migrations apply RESERVAS_DB --remote"
   },
