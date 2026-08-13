@@ -189,105 +189,10 @@ async function handleApi(request, env, url) {
       return jsonError("Usuário não autenticado.", 401, cors);
     }
     if (session.role !== USER_ROLE) {
-      return jsonError("Administrador não pode criar reservas.", 403, cors);
+      return jsonError("Utilize a área administrativa para criar reservas como administrador.", 403, cors);
     }
 
-    const body = await parseJsonBody(request);
-    const normalized = normalizeReservationBody(body);
-    if (!normalized.valid) {
-      return jsonError(normalized.message, 400, cors);
-    }
-
-    if (normalized.recurrencePattern !== "single") {
-      return jsonError("Usuários autenticados só podem criar reservas únicas. Reservas recorrentes são exclusivas do administrador.", 403, cors);
-    }
-
-    let occurrenceDates;
-    try {
-      occurrenceDates = generateOccurrenceDates(normalized);
-    } catch (error) {
-      return jsonError(error.message || "Recorrência inválida.", 400, cors);
-    }
-    if (!occurrenceDates.length) {
-      return jsonError("A recorrência informada não gera nenhuma ocorrência válida.", 400, cors);
-    }
-    const conflicts = await findConflictsForOccurrences(env, occurrenceDates, normalized, null);
-    if (conflicts.length) {
-      return jsonResponse({
-        error: "Existem conflitos de horário.",
-        conflicts: conflicts.map(formatConflict)
-      }, 409, cors);
-    }
-
-    const nowIso = new Date().toISOString();
-    const seriesId = normalized.recurrencePattern === "single" ? null : crypto.randomUUID();
-    const reservations = [];
-
-    for (let index = 0; index < occurrenceDates.length; index += 1) {
-      const occurrenceDate = occurrenceDates[index];
-      const reservation = await insertReservation(env, {
-        id: crypto.randomUUID(),
-        ownerGoogleId: session.sub,
-        ownerName: session.name,
-        ownerEmail: session.email,
-        nome: normalized.nome,
-        setor: normalized.setor,
-        telefone: normalized.telefone,
-        emailContato: normalized.emailContato,
-        descricao: normalized.descricao,
-        dataReserva: occurrenceDate,
-        horaInicio: normalized.horaInicio,
-        horaFim: normalized.horaFim,
-        inicioIso: buildLocalIso(occurrenceDate, normalized.horaInicio),
-        fimIso: buildLocalIso(occurrenceDate, normalized.horaFim),
-        status: "ativa",
-        googleCalendarUrl: buildGoogleCalendarUrl({
-          title: normalized.descricao,
-          startIso: buildLocalIso(occurrenceDate, normalized.horaInicio),
-          endIso: buildLocalIso(occurrenceDate, normalized.horaFim),
-          description: buildReservationDescription({
-            descricao: normalized.descricao,
-            ownerName: session.name,
-            ownerEmail: session.email,
-            setor: normalized.setor,
-            telefone: normalized.telefone
-          }),
-          location: "Auditório",
-          attendees: []
-        }),
-        createdAt: nowIso,
-        updatedAt: nowIso,
-        isImported: 0,
-        sourceOrigin: "manual",
-        sourceReference: null,
-        auditPayloadJson: JSON.stringify({
-          requestedBy: {
-            id: session.sub,
-            name: session.name,
-            email: session.email
-          },
-          original: body || null
-        }),
-        recurrencePattern: normalized.recurrencePattern,
-        recurrenceSeriesId: seriesId,
-        recurrenceOccurrence: index,
-        recurrenceUntil: normalized.recurrenceUntil || null,
-        recurrenceWeekdaysJson: JSON.stringify(normalized.recurrenceWeekdays || []),
-        createdByRole: session.role,
-        updatedByRole: session.role
-      });
-      reservations.push(reservation);
-    }
-
-    return jsonResponse({
-      message: reservations.length > 1
-        ? "Série de reservas criada com sucesso."
-        : "Reserva criada com sucesso.",
-      reservation: reservations[0],
-      reservations,
-      seriesId,
-      googleCalendarUrl: reservations[0]?.googleCalendarUrl || null
-    }, 201, cors);
+    return createReservationSeries(request, env, session, cors, { allowRecurring: false });
   }
 
   if (url.pathname.startsWith("/api/reservas/") && method === "DELETE") {
@@ -378,7 +283,12 @@ async function handleApi(request, env, url) {
   }
 
   if (url.pathname === "/api/admin/reservas" && method === "POST") {
-    return jsonError("Administrador não pode criar reservas.", 403, cors);
+    if (!session || session.role !== ADMIN_ROLE) {
+      return jsonError("Acesso administrativo não autorizado.", 403, cors);
+    }
+
+    // Administrador pode criar reservas em nome de terceiros, inclusive recorrentes.
+    return createReservationSeries(request, env, session, cors, { allowRecurring: true });
   }
 
   if (url.pathname.startsWith("/api/admin/reservas/") && method === "DELETE") {
@@ -429,6 +339,118 @@ function isAllowedOrigin(origin, env) {
     .filter(Boolean);
   const allowed = configured.length ? configured : DEFAULT_ALLOWED_ORIGINS;
   return allowed.includes(origin);
+}
+
+async function createReservationSeries(request, env, session, cors, { allowRecurring }) {
+  const body = await parseJsonBody(request);
+  const normalized = normalizeReservationBody(body);
+  if (!normalized.valid) {
+    return jsonError(normalized.message, 400, cors);
+  }
+
+  // Restrição de autorização aplicada no backend: usuários comuns só podem criar
+  // reservas únicas. Reservas recorrentes são exclusivas do administrador.
+  if (!allowRecurring && normalized.recurrencePattern !== "single") {
+    return jsonError("Usuários autenticados só podem criar reservas únicas. Reservas recorrentes são exclusivas do administrador.", 403, cors);
+  }
+
+  let occurrenceDates;
+  try {
+    occurrenceDates = generateOccurrenceDates(normalized);
+  } catch (error) {
+    return jsonError(error.message || "Recorrência inválida.", 400, cors);
+  }
+  if (!occurrenceDates.length) {
+    return jsonError("A recorrência informada não gera nenhuma ocorrência válida.", 400, cors);
+  }
+
+  // Regras de conflito de horário permanecem inalteradas e valem também para o
+  // administrador: não há bypass de conflitos para nenhum perfil.
+  const conflicts = await findConflictsForOccurrences(env, occurrenceDates, normalized, null);
+  if (conflicts.length) {
+    return jsonResponse({
+      error: "Existem conflitos de horário.",
+      conflicts: conflicts.map(formatConflict)
+    }, 409, cors);
+  }
+
+  const isAdminSession = session.role === ADMIN_ROLE;
+  // Reservas criadas pelo administrador não pertencem a uma conta de usuário comum:
+  // owner_google_id registra o administrador responsável, enquanto responsável/contato
+  // (nome e e-mail informados no formulário) identificam a pessoa para quem a reserva foi feita.
+  const ownerGoogleId = session.sub;
+  const ownerName = isAdminSession ? normalized.nome : session.name;
+  const ownerEmail = isAdminSession ? normalized.emailContato : session.email;
+
+  const nowIso = new Date().toISOString();
+  const seriesId = normalized.recurrencePattern === "single" ? null : crypto.randomUUID();
+  const reservations = [];
+
+  for (let index = 0; index < occurrenceDates.length; index += 1) {
+    const occurrenceDate = occurrenceDates[index];
+    const reservation = await insertReservation(env, {
+      id: crypto.randomUUID(),
+      ownerGoogleId,
+      ownerName,
+      ownerEmail,
+      nome: normalized.nome,
+      setor: normalized.setor,
+      telefone: normalized.telefone,
+      emailContato: normalized.emailContato,
+      descricao: normalized.descricao,
+      dataReserva: occurrenceDate,
+      horaInicio: normalized.horaInicio,
+      horaFim: normalized.horaFim,
+      inicioIso: buildLocalIso(occurrenceDate, normalized.horaInicio),
+      fimIso: buildLocalIso(occurrenceDate, normalized.horaFim),
+      status: "ativa",
+      googleCalendarUrl: buildGoogleCalendarUrl({
+        title: normalized.descricao,
+        startIso: buildLocalIso(occurrenceDate, normalized.horaInicio),
+        endIso: buildLocalIso(occurrenceDate, normalized.horaFim),
+        description: buildReservationDescription({
+          descricao: normalized.descricao,
+          ownerName,
+          ownerEmail,
+          setor: normalized.setor,
+          telefone: normalized.telefone
+        }),
+        location: "Auditório",
+        attendees: []
+      }),
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      isImported: 0,
+      sourceOrigin: "manual",
+      sourceReference: null,
+      auditPayloadJson: JSON.stringify({
+        requestedBy: {
+          id: session.sub,
+          name: session.name,
+          email: session.email
+        },
+        original: body || null
+      }),
+      recurrencePattern: normalized.recurrencePattern,
+      recurrenceSeriesId: seriesId,
+      recurrenceOccurrence: index,
+      recurrenceUntil: normalized.recurrenceUntil || null,
+      recurrenceWeekdaysJson: JSON.stringify(normalized.recurrenceWeekdays || []),
+      createdByRole: session.role,
+      updatedByRole: session.role
+    });
+    reservations.push(reservation);
+  }
+
+  return jsonResponse({
+    message: reservations.length > 1
+      ? "Série de reservas criada com sucesso."
+      : "Reserva criada com sucesso.",
+    reservation: reservations[0],
+    reservations,
+    seriesId,
+    googleCalendarUrl: reservations[0]?.googleCalendarUrl || null
+  }, 201, cors);
 }
 
 async function handleReservationDelete(env, session, reservationId, scope, cors, adminOnly = false) {

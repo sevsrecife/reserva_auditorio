@@ -36,6 +36,15 @@ const els = {
   adminStatusText: document.getElementById("adminStatusText"),
   adminReservasTableBody: document.querySelector("#adminReservasTable tbody"),
   adminEditForm: document.getElementById("adminEditForm"),
+  adminFilterForm: document.getElementById("adminFilterForm"),
+  adminFilterDataInicio: document.getElementById("adminFilterDataInicio"),
+  adminFilterDataFim: document.getElementById("adminFilterDataFim"),
+  adminFilterHorario: document.getElementById("adminFilterHorario"),
+  adminFilterDescricao: document.getElementById("adminFilterDescricao"),
+  adminFilterResponsavel: document.getElementById("adminFilterResponsavel"),
+  adminFilterContato: document.getElementById("adminFilterContato"),
+  adminFilterClearBtn: document.getElementById("adminFilterClearBtn"),
+  adminFilterSummary: document.getElementById("adminFilterSummary"),
   recurrencePattern: document.getElementById("recurrencePattern"),
   recurrenceWeekdaysWrap: document.getElementById("recurrenceWeekdaysWrap"),
   recurrenceWeekdays: [...document.querySelectorAll(".recurrence-weekday")],
@@ -54,7 +63,8 @@ const state = {
   pendingDeleteReservation: null,
   pendingDeleteRoute: "public",
   restoreDetailAfterDeleteScope: false,
-  busy: false
+  busy: false,
+  adminReservas: []
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -98,6 +108,7 @@ function bindEvents() {
   els.reservaForm.addEventListener("submit", handleReservaSubmit);
   els.adminLoginForm.addEventListener("submit", handleAdminLoginSubmit);
   els.adminEditForm.addEventListener("submit", handleAdminEditSubmit);
+  bindAdminFilterEvents();
   els.recurrencePattern.addEventListener("change", syncRecurrenceUi);
   document.getElementById("dataInicio").addEventListener("change", syncSingleDateEnd);
   els.copyReservationBtn.addEventListener("click", copySuccessDetails);
@@ -168,21 +179,23 @@ function syncSessionUi() {
 
   const nome = document.getElementById("nome");
   const email = document.getElementById("email");
-  if (isAuthenticated) {
+  if (isAuthenticated && !isAdmin) {
+    // Usuário comum reserva sempre em seu próprio nome/e-mail Google.
     nome.value = session.user.name || "";
     email.value = session.user.email || "";
     nome.readOnly = true;
     email.readOnly = true;
   } else {
+    // Administrador informa o responsável/contato de terceiros; visitante ainda não está autenticado.
     nome.readOnly = false;
     email.readOnly = false;
-    els.reservaForm.reset();
+    if (!isAuthenticated) {
+      els.reservaForm.reset();
+    }
   }
 
-  els.reservaSubmitBtn.disabled = !isAuthenticated || isAdmin;
-  els.reservaSubmitBtn.textContent = isAdmin
-    ? "Administrador não pode criar reservas"
-    : "Registrar reserva";
+  els.reservaSubmitBtn.disabled = !isAuthenticated;
+  els.reservaSubmitBtn.textContent = "Registrar reserva";
 
   // Usuários comuns só podem fazer reserva única; campos de recorrência ficam ocultos
   const recurrenceFieldsVisible = isAdmin || !isAuthenticated;
@@ -451,11 +464,7 @@ async function handleReservaSubmit(event) {
     return;
   }
 
-  if (state.currentSession.role !== "user") {
-    showFeedback("A conta administrativa não pode criar reservas.", "warning");
-    return;
-  }
-
+  const isAdmin = state.currentSession.role === "admin";
   const payload = buildReservaPayload();
   if (!payload) {
     return;
@@ -463,7 +472,7 @@ async function handleReservaSubmit(event) {
 
   try {
     setBusy(true);
-    const response = await apiFetch("/api/reservas", {
+    const response = await apiFetch(isAdmin ? "/api/admin/reservas" : "/api/reservas", {
       method: "POST",
       body: JSON.stringify(payload)
     });
@@ -474,6 +483,9 @@ async function handleReservaSubmit(event) {
     els.reservaForm.reset();
     syncSessionUi();
     await loadReservas();
+    if (isAdmin) {
+      await loadAdminReservas();
+    }
     showFeedback(response.message || "Reserva registrada com sucesso.", "success");
   } catch (error) {
     console.error(error);
@@ -620,10 +632,105 @@ async function loadAdminReservas() {
   }
 
   const data = await apiFetch("/api/admin/reservas");
-  const reservas = data.reservas || [];
+  state.adminReservas = data.reservas || [];
+  renderAdminReservasTable();
+}
+
+function bindAdminFilterEvents() {
+  const debouncedRender = debounce(renderAdminReservasTable, 200);
+  [
+    els.adminFilterDataInicio,
+    els.adminFilterDataFim,
+    els.adminFilterHorario
+  ].forEach((input) => input.addEventListener("change", renderAdminReservasTable));
+
+  [
+    els.adminFilterDescricao,
+    els.adminFilterResponsavel,
+    els.adminFilterContato
+  ].forEach((input) => input.addEventListener("input", debouncedRender));
+
+  els.adminFilterClearBtn.addEventListener("click", () => {
+    els.adminFilterForm.reset();
+    renderAdminReservasTable();
+  });
+
+  els.adminFilterForm.addEventListener("submit", (event) => event.preventDefault());
+}
+
+function debounce(fn, delay) {
+  let timer = null;
+  return (...args) => {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(() => fn(...args), delay);
+  };
+}
+
+function getAdminFilters() {
+  return {
+    dataInicio: els.adminFilterDataInicio.value || "",
+    dataFim: els.adminFilterDataFim.value || "",
+    horario: els.adminFilterHorario.value || "",
+    descricao: normalizeSearchText(els.adminFilterDescricao.value),
+    responsavel: normalizeSearchText(els.adminFilterResponsavel.value),
+    contato: normalizeSearchText(els.adminFilterContato.value)
+  };
+}
+
+function normalizeSearchText(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function applyAdminFilters(reservas, filters) {
+  return reservas.filter((reserva) => {
+    if (filters.dataInicio && compareDates(reserva.dataReserva, filters.dataInicio) < 0) {
+      return false;
+    }
+    if (filters.dataFim && compareDates(reserva.dataReserva, filters.dataFim) > 0) {
+      return false;
+    }
+    if (filters.horario) {
+      const dentroDoHorario = filters.horario >= reserva.horaInicio && filters.horario < reserva.horaFim;
+      if (!dentroDoHorario) {
+        return false;
+      }
+    }
+    if (filters.descricao && !normalizeSearchText(reserva.descricao).includes(filters.descricao)) {
+      return false;
+    }
+    if (filters.responsavel) {
+      const responsavel = normalizeSearchText(reserva.ownerName || reserva.nome);
+      if (!responsavel.includes(filters.responsavel)) {
+        return false;
+      }
+    }
+    if (filters.contato) {
+      const contato = normalizeSearchText(`${reserva.ownerEmail || ""} ${reserva.emailContato || ""} ${reserva.telefone || ""}`);
+      if (!contato.includes(filters.contato)) {
+        return false;
+      }
+    }
+    return true;
+  });
+}
+
+function renderAdminReservasTable() {
+  const filters = getAdminFilters();
+  const total = state.adminReservas.length;
+  const filtered = applyAdminFilters(state.adminReservas, filters);
+  const filtersActive = Object.values(filters).some((value) => Boolean(value));
+
+  els.adminFilterSummary.textContent = filtersActive
+    ? `Exibindo ${filtered.length} de ${total} reserva(s) com os filtros aplicados.`
+    : `Exibindo todas as ${total} reserva(s).`;
+
   els.adminReservasTableBody.innerHTML = "";
 
-  for (const reserva of reservas) {
+  for (const reserva of filtered) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${escapeHtml(formatDate(reserva.dataReserva))}</td>
@@ -650,6 +757,12 @@ async function loadAdminReservas() {
     });
 
     els.adminReservasTableBody.appendChild(tr);
+  }
+
+  if (!filtered.length) {
+    const emptyRow = document.createElement("tr");
+    emptyRow.innerHTML = `<td colspan="8" class="text-center text-muted py-3">Nenhuma reserva encontrada para os filtros informados.</td>`;
+    els.adminReservasTableBody.appendChild(emptyRow);
   }
 }
 
@@ -779,7 +892,7 @@ function configureDateGuards(id) {
 
 function setBusy(isBusy) {
   state.busy = isBusy;
-  els.reservaSubmitBtn.disabled = isBusy || !state.currentSession?.authenticated || state.currentSession?.role === "admin";
+  els.reservaSubmitBtn.disabled = isBusy || !state.currentSession?.authenticated;
   document.querySelectorAll("#adminLoginForm button, #adminEditForm button").forEach((button) => {
     button.disabled = isBusy;
   });
