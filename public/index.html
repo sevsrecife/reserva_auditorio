@@ -102,11 +102,22 @@
               <label for="dataInicio" class="form-label">Data inicial</label>
               <input type="date" class="form-control" id="dataInicio" required>
             </div>
-            <div class="col-md-4" id="dataFimGroup">
+            <div class="col-md-4">
+              <label for="inicio" class="form-label">Hora inicial</label>
+              <select class="form-select" id="inicio" required></select>
+            </div>
+            <div class="col-md-4">
+              <label for="fim" class="form-label">Hora final</label>
+              <select class="form-select" id="fim" required></select>
+            </div>
+          </div>
+
+          <div class="row g-3 mt-1">
+            <div class="col-md-6" id="dataFimGroup">
               <label for="dataFim" class="form-label">Data final da recorrência</label>
               <input type="date" class="form-control" id="dataFim" required>
             </div>
-            <div class="col-md-4" id="recurrencePatternGroup">
+            <div class="col-md-6" id="recurrencePatternGroup">
               <label for="recurrencePattern" class="form-label">Recorrência</label>
               <select id="recurrencePattern" class="form-select">
                 <option value="single">Reserva única</option>
@@ -125,17 +136,6 @@
               <label class="weekday-option"><input type="checkbox" value="3" class="recurrence-weekday"> Quarta</label>
               <label class="weekday-option"><input type="checkbox" value="4" class="recurrence-weekday"> Quinta</label>
               <label class="weekday-option"><input type="checkbox" value="5" class="recurrence-weekday"> Sexta</label>
-            </div>
-          </div>
-
-          <div class="row g-3 mt-1">
-            <div class="col-md-3">
-              <label for="inicio" class="form-label">Hora inicial</label>
-              <select class="form-select" id="inicio" required></select>
-            </div>
-            <div class="col-md-3">
-              <label for="fim" class="form-label">Hora final</label>
-              <select class="form-select" id="fim" required></select>
             </div>
           </div>
 
