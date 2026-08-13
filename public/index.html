@@ -278,6 +278,139 @@
         </form>
       </div>
     </section>
+    <section class="mb-5">
+      <div class="section-card">
+        <div class="section-card-header">
+          <h2 class="h5 mb-0">Funcionalidades do Sistema</h2>
+          <p class="text-muted mb-0">Visão geral de todos os recursos disponíveis nesta plataforma.</p>
+        </div>
+
+        <div class="accordion accordion-flush mt-3" id="featuresAccordion">
+
+          <div class="accordion-item">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#feat1">
+                📅 Calendário e Agenda
+              </button>
+            </h3>
+            <div id="feat1" class="accordion-collapse collapse" data-bs-parent="#featuresAccordion">
+              <div class="accordion-body">
+                <ul class="mb-0">
+                  <li>Visualização interativa de reservas em calendário (mês / semana / dia / lista).</li>
+                  <li>Clique em qualquer evento para visualizar os detalhes completos da reserva.</li>
+                  <li>Atualização automática do calendário após criação, edição ou exclusão de reservas.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="accordion-item">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#feat2">
+                🔐 Autenticação
+              </button>
+            </h3>
+            <div id="feat2" class="accordion-collapse collapse" data-bs-parent="#featuresAccordion">
+              <div class="accordion-body">
+                <ul class="mb-0">
+                  <li><strong>Login com Google (OAuth 2.0)</strong> — para usuários comuns da SEVS.</li>
+                  <li><strong>Login administrativo</strong> (usuário e senha) — para acesso à área de gestão.</li>
+                  <li>Logout com encerramento seguro da sessão.</li>
+                  <li>Sessão gerenciada via cookie assinado (HMAC) no servidor.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="accordion-item">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#feat3">
+                📝 Reservas — Usuário autenticado
+              </button>
+            </h3>
+            <div id="feat3" class="accordion-collapse collapse" data-bs-parent="#featuresAccordion">
+              <div class="accordion-body">
+                <ul class="mb-0">
+                  <li>Criar <strong>reserva única</strong> informando: nome, e-mail, setor, telefone, descrição, data e horário (início e fim).</li>
+                  <li>Validação automática de <strong>conflito de horários</strong> — sobreposições são impedidas pelo servidor.</li>
+                  <li>Após a criação, geração automática de <strong>link para o Google Agenda</strong>.</li>
+                  <li>Botão para <strong>copiar os detalhes</strong> da reserva para a área de transferência.</li>
+                  <li>Exclusão da própria reserva (com confirmação).</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="accordion-item">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#feat4">
+                🛡️ Reservas — Administrador
+              </button>
+            </h3>
+            <div id="feat4" class="accordion-collapse collapse" data-bs-parent="#featuresAccordion">
+              <div class="accordion-body">
+                <ul class="mb-0">
+                  <li>Criar <strong>reserva única</strong>.</li>
+                  <li>Criar <strong>reserva diária</strong> (repete todos os dias até a data final).</li>
+                  <li>Criar <strong>reserva semanal</strong> (com seleção dos dias da semana desejados).</li>
+                  <li>Criar <strong>reserva mensal</strong> (repete mensalmente até a data final).</li>
+                  <li>Criar reservas <strong>em nome de terceiros</strong>.</li>
+                  <li>Editar qualquer reserva (própria ou de outros usuários).</li>
+                  <li>Excluir <strong>uma ocorrência</strong> de uma série recorrente.</li>
+                  <li>Excluir a <strong>série inteira</strong> de uma reserva recorrente.</li>
+                  <li>Todas as reservas do administrador continuam sujeitas às <strong>regras de conflito de horários</strong>.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="accordion-item">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#feat5">
+                ⚙️ Área Administrativa
+              </button>
+            </h3>
+            <div id="feat5" class="accordion-collapse collapse" data-bs-parent="#featuresAccordion">
+              <div class="accordion-body">
+                <ul class="mb-0">
+                  <li>Acesso restrito via credenciais administrativas.</li>
+                  <li>Listagem completa de <strong>todas as reservas</strong> em tabela.</li>
+                  <li><strong>Filtro por Data</strong> — data específica ou intervalo (de / até).</li>
+                  <li><strong>Filtro por Horário</strong> — localiza reservas que abrangem o horário informado.</li>
+                  <li><strong>Filtro por Descrição</strong> — busca parcial pelo título/descrição.</li>
+                  <li><strong>Filtro por Responsável</strong> — busca parcial pelo nome.</li>
+                  <li><strong>Filtro por Contato</strong> — busca por e-mail ou telefone.</li>
+                  <li>Combinação simultânea de múltiplos filtros.</li>
+                  <li>Limpeza de todos os filtros com um clique.</li>
+                  <li>Edição inline de qualquer reserva (nome, e-mail, setor, telefone, descrição, data, horário, status).</li>
+                  <li>Exclusão de qualquer reserva com opção de remover ocorrência única ou série inteira.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="accordion-item">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#feat6">
+                🔒 Segurança e Autorização
+              </button>
+            </h3>
+            <div id="feat6" class="accordion-collapse collapse" data-bs-parent="#featuresAccordion">
+              <div class="accordion-body">
+                <ul class="mb-0">
+                  <li>Restrição de reservas recorrentes para usuários comuns <strong>validada no servidor</strong> (não apenas no frontend).</li>
+                  <li>Regras de <strong>conflito de horários</strong> aplicadas no servidor para todos os perfis, incluindo o administrador.</li>
+                  <li>Autorização baseada em perfis: <strong>Visitante</strong> · <strong>Usuário</strong> · <strong>Administrador</strong>.</li>
+                  <li>Proteção contra manipulação de requisições (payload, parâmetros, JavaScript do navegador).</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
   </main>
 
   <div class="modal fade" id="reservationSuccessModal" tabindex="-1" aria-hidden="true">
