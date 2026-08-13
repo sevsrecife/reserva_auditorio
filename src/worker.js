@@ -283,12 +283,7 @@ async function handleApi(request, env, url) {
       reservation: reservations[0],
       reservations,
       seriesId,
-      googleCalendarUrl: reservations[0]?.googleCalendarUrl || null,
-      shareEmailUrl: buildShareEmailUrl({
-        reservation: reservations[0],
-        ownerName: session.name,
-        ownerEmail: session.email
-      })
+      googleCalendarUrl: reservations[0]?.googleCalendarUrl || null
     }, 201, cors);
   }
 
@@ -850,25 +845,6 @@ function buildGoogleCalendarUrl({ title, startIso, endIso, description, location
   }
 
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
-}
-
-function buildShareEmailUrl({ reservation, ownerName, ownerEmail }) {
-  if (!reservation) {
-    return null;
-  }
-  const subject = encodeURIComponent(`Reserva do auditório: ${reservation.descricao}`);
-  const body = encodeURIComponent(
-    [
-      `Reserva registrada com sucesso.`,
-      `Responsável: ${ownerName} (${ownerEmail})`,
-      `Data: ${formatDate(reservation.dataReserva)}`,
-      `Horário: ${reservation.horaInicio} - ${reservation.horaFim}`,
-      `Título: ${reservation.descricao}`,
-      `ID: ${reservation.id || "n/d"}`,
-      `Google Calendar: ${reservation.googleCalendarUrl || ""}`
-    ].join("\n")
-  );
-  return `mailto:?subject=${subject}&body=${body}`;
 }
 
 function compareDateStrings(a, b) {

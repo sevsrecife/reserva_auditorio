@@ -133,6 +133,10 @@ body.notice-open {
 
 #appFeedback {
   border-radius: 0.85rem;
+  position: sticky;
+  top: 1rem;
+  z-index: 1030;
+  box-shadow: 0 10px 24px rgba(20, 33, 61, 0.14);
 }
 
 .startup-notice-overlay {

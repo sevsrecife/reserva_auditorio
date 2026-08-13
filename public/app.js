@@ -18,12 +18,10 @@ const els = {
   reservaSuccessModal: new bootstrap.Modal(document.getElementById("reservationSuccessModal")),
   reservationSuccessBody: document.getElementById("reservationSuccessBody"),
   successCalendarLink: document.getElementById("successCalendarLink"),
-  successEmailLink: document.getElementById("successEmailLink"),
   copyReservationBtn: document.getElementById("copyReservationBtn"),
   reservationDetailModal: new bootstrap.Modal(document.getElementById("reservationDetailModal")),
   reservationDetailBody: document.getElementById("reservationDetailBody"),
   detailCalendarLink: document.getElementById("detailCalendarLink"),
-  detailEmailLink: document.getElementById("detailEmailLink"),
   detailDeleteBtn: document.getElementById("detailDeleteBtn"),
   reservationDeleteScopeModalEl: document.getElementById("reservationDeleteScopeModal"),
   reservationDeleteScopeModal: new bootstrap.Modal(document.getElementById("reservationDeleteScopeModal")),
@@ -320,7 +318,6 @@ function onEventClick(info) {
 
   renderReservationDetails(reserva, els.reservationDetailBody, isAdmin);
   els.detailCalendarLink.href = reserva.googleCalendarUrl || buildCalendarUrl(reserva);
-  els.detailEmailLink.href = buildMailtoUrl(reserva);
   els.detailDeleteBtn.classList.toggle("d-none", !canDelete);
   els.detailDeleteBtn.dataset.reservationId = reserva.id;
 
@@ -548,13 +545,10 @@ function renderSuccessModal(response) {
     .join("");
 
   const calendarUrl = response.googleCalendarUrl || buildCalendarUrl(reservation);
-  const emailUrl = response.shareEmailUrl || buildMailtoUrl(reservation);
   els.successCalendarLink.href = calendarUrl;
-  els.successEmailLink.href = emailUrl;
   els.copyReservationBtn.dataset.payload = JSON.stringify({
     ...reservation,
-    googleCalendarUrl: calendarUrl,
-    shareEmailUrl: emailUrl
+    googleCalendarUrl: calendarUrl
   });
 }
 
@@ -583,7 +577,7 @@ function formatConflictMessage(conflicts) {
   const dates = conflicts
     .map((conflict) => `${formatDate(conflict.dataReserva)} ${conflict.inicio} - ${conflict.fim}`)
     .join("; ");
-  return `Conflito(s) de horário encontrado(s): ${dates}`;
+  return `Alerta de conflito: ${dates}`;
 }
 
 async function handleAdminLoginSubmit(event) {
@@ -782,7 +776,7 @@ function setBusy(isBusy) {
 }
 
 function showFeedback(message, type = "success", sticky = false) {
-  els.appFeedback.className = `alert alert-${type} ${sticky ? "" : "fade-in"} mt-3`;
+  els.appFeedback.className = `alert alert-${type} ${sticky ? "" : "fade-in"} mt-3 shadow-sm fw-semibold border-0`;
   els.appFeedback.textContent = message;
   els.appFeedback.classList.remove("d-none");
 
@@ -820,24 +814,6 @@ function buildDeleteReservationPath(reservationId, scope, useAdminRoute) {
 
 function isRecurringReservation(reserva) {
   return Boolean(reserva?.recurrenceSeriesId) && (reserva.recurrencePattern || "single") !== "single";
-}
-
-function buildMailtoUrl(reserva) {
-  const subject = encodeURIComponent(`Reserva do auditório: ${reserva.descricao || ""}`);
-  const body = encodeURIComponent(
-    [
-      `Reserva registrada no sistema de auditório.`,
-      `Responsável: ${reserva.ownerName || reserva.nome}`,
-      `E-mail: ${reserva.ownerEmail || reserva.emailContato || ""}`,
-      `Setor: ${reserva.setor || ""}`,
-      `Data: ${formatDate(reserva.dataReserva)}`,
-      `Horário: ${reserva.horaInicio} - ${reserva.horaFim}`,
-      `Descrição: ${reserva.descricao || ""}`,
-      `ID: ${reserva.id || ""}`,
-      `Google Calendar: ${reserva.googleCalendarUrl || buildCalendarUrl(reserva)}`
-    ].join("\n")
-  );
-  return `mailto:?subject=${subject}&body=${body}`;
 }
 
 function formatRecurrenceLabel(reserva) {
