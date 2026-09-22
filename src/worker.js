@@ -676,6 +676,10 @@ function normalizeReservationBody(body, options = {}) {
     return { valid: false, message: "E-mail da reserva inválido." };
   }
 
+  if (!isValidBrazilianPhone(telefone)) {
+    return { valid: false, message: "Telefone da reserva inválido. Informe um telefone brasileiro com DDD." };
+  }
+
   if (!isValidDate(dataReserva) || !isValidDate(dataFim)) {
     return { valid: false, message: "Data da reserva inválida." };
   }
@@ -1008,6 +1012,18 @@ function parseWeekdays(value) {
 
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function isValidBrazilianPhone(phone) {
+  let digits = String(phone || "").replace(/\D/g, "");
+  if ((digits.length === 12 || digits.length === 13) && digits.startsWith("55")) {
+    digits = digits.slice(2);
+  }
+  if (!/^\d{10,11}$/.test(digits) || digits.startsWith("0") || /^([0-9])\1+$/.test(digits)) {
+    return false;
+  }
+  const subscriber = digits.slice(2);
+  return subscriber.length === 8 || (subscriber.length === 9 && subscriber.startsWith("9"));
 }
 
 function safeJsonParse(value, fallback) {

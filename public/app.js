@@ -333,9 +333,10 @@ function onEventClick(info) {
 
 function renderReservationDetails(reserva, container) {
   const unavailable = "Não informado";
+  const ownerEmail = isSyntheticImportEmail(reserva.ownerEmail) ? "" : reserva.ownerEmail;
   const items = [
     ["Nome do responsável", reserva.ownerName || reserva.nome || unavailable],
-    ["E-mail", reserva.emailContato || reserva.ownerEmail || unavailable],
+    ["E-mail", reserva.emailContato || ownerEmail || unavailable],
     ["Telefone", reserva.telefone || unavailable],
     ["Setor", reserva.setor || unavailable],
     ["Título / descrição", reserva.descricao || unavailable]
@@ -349,6 +350,10 @@ function renderReservationDetails(reserva, container) {
       </div>
     `)
     .join("");
+}
+
+function isSyntheticImportEmail(email) {
+  return /^manual-import-\d+@sevs\.local$/i.test(String(email || ""));
 }
 
 async function deleteSelectedReservation() {
