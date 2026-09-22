@@ -648,6 +648,7 @@ function serializePublicReservation(row) {
     recurrenceUntil: row.recurrence_until,
     recurrenceWeekdays: safeJsonParse(row.recurrence_weekdays_json, []),
     ownerName: row.owner_name,
+    ownerEmail: row.owner_email,
     canDelete: false,
     canEdit: false
   };

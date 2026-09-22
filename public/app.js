@@ -323,7 +323,7 @@ function onEventClick(info) {
   const isAdmin = state.currentSession?.role === "admin";
   const canDelete = isAdmin || Boolean(reserva.canDelete);
 
-  renderReservationDetails(reserva, els.reservationDetailBody, isAdmin);
+  renderReservationDetails(reserva, els.reservationDetailBody);
   els.detailCalendarLink.href = reserva.googleCalendarUrl || buildCalendarUrl(reserva);
   els.detailDeleteBtn.classList.toggle("d-none", !canDelete);
   els.detailDeleteBtn.dataset.reservationId = reserva.id;
@@ -331,17 +331,17 @@ function onEventClick(info) {
   els.reservationDetailModal.show();
 }
 
-function renderReservationDetails(reserva, container, isAdmin) {
+function renderReservationDetails(reserva, container) {
+  const unavailable = "Não informado";
   const items = [
-    ["Nome do responsável", reserva.ownerName || reserva.nome],
-    ["E-mail", isAdmin ? reserva.ownerEmail || reserva.emailContato : reserva.emailContato],
-    ["Telefone", reserva.telefone],
-    ["Setor", reserva.setor],
-    ["Título / descrição", reserva.descricao]
+    ["Nome do responsável", reserva.ownerName || reserva.nome || unavailable],
+    ["E-mail", reserva.emailContato || reserva.ownerEmail || unavailable],
+    ["Telefone", reserva.telefone || unavailable],
+    ["Setor", reserva.setor || unavailable],
+    ["Título / descrição", reserva.descricao || unavailable]
   ];
 
   container.innerHTML = items
-    .filter(([, value]) => value)
     .map(([label, value]) => `
       <div class="detail-row">
         <div class="detail-label">${escapeHtml(label)}</div>
