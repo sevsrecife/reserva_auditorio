@@ -631,6 +631,9 @@ function serializePublicReservation(row) {
   return {
     id: row.id,
     descricao: row.descricao,
+    setor: row.setor,
+    telefone: row.telefone,
+    emailContato: row.email_contato,
     dataReserva: business.dataReserva,
     horaInicio: business.horaInicio,
     horaFim: business.horaFim,
