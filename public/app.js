@@ -333,13 +333,11 @@ function onEventClick(info) {
 
 function renderReservationDetails(reserva, container, isAdmin) {
   const items = [
-    ["Descrição", reserva.descricao],
-    ["Responsável", reserva.ownerName || reserva.nome],
+    ["Nome do responsável", reserva.ownerName || reserva.nome],
     ["E-mail", isAdmin ? reserva.ownerEmail || reserva.emailContato : reserva.emailContato],
-    ["Setor", reserva.setor],
     ["Telefone", reserva.telefone],
-    ["Data", formatDate(reserva.dataReserva)],
-    ["Horário", `${reserva.horaInicio} - ${reserva.horaFim}`]
+    ["Setor", reserva.setor],
+    ["Título / descrição", reserva.descricao]
   ];
 
   container.innerHTML = items
