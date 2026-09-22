@@ -16,26 +16,22 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    if (request.method === "OPTIONS" && url.pathname.startsWith("/api/")) {
+    if (!url.pathname.startsWith("/api/")) {
+      return new Response("Not Found", { status: 404 });
+    }
+
+    if (request.method === "OPTIONS") {
       return handleOptions(request, env);
     }
 
-    if (url.pathname.startsWith("/api/")) {
-      try {
-        return await handleApi(request, env, url);
-      } catch (error) {
-        console.error("Unhandled API error:", error);
-        const origin = request.headers.get("Origin");
-        const cors = buildCorsHeaders(origin, env);
-        return jsonError("Erro interno no servidor.", 500, cors);
-      }
+    try {
+      return await handleApi(request, env, url);
+    } catch (error) {
+      console.error("Unhandled API error:", error);
+      const origin = request.headers.get("Origin");
+      const cors = buildCorsHeaders(origin, env);
+      return jsonError("Erro interno no servidor.", 500, cors);
     }
-
-    if (env.ASSETS) {
-      return env.ASSETS.fetch(request);
-    }
-
-    return new Response("Not Found", { status: 404 });
   }
 };
 

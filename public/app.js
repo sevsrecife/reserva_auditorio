@@ -3,8 +3,6 @@ const API_BASE_URL = String(appConfig.apiBaseUrl || "").replace(/\/$/, "") || wi
 const TIMEZONE = "America/Recife";
 
 const els = {
-  startupNoticeOverlay: document.getElementById("startupNoticeOverlay"),
-  startupNoticeOkBtn: document.getElementById("startupNoticeOkBtn"),
   loginBtn: document.getElementById("loginBtn"),
   logoutBtn: document.getElementById("logoutBtn"),
   toggleAdminAreaBtn: document.getElementById("toggleAdminAreaBtn"),
@@ -68,7 +66,6 @@ const state = {
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
-  initializeStartupNotice();
   bindEvents();
   configureTimeSelects();
   configureDateGuards("dataInicio");
@@ -85,19 +82,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     showFeedback(error.message || "Falha ao inicializar o sistema.", "danger");
   }
 });
-
-function initializeStartupNotice() {
-  if (!els.startupNoticeOverlay || !els.startupNoticeOkBtn) {
-    return;
-  }
-
-  document.body.classList.add("notice-open");
-  els.startupNoticeOkBtn.focus();
-  els.startupNoticeOkBtn.addEventListener("click", () => {
-    els.startupNoticeOverlay.remove();
-    document.body.classList.remove("notice-open");
-  });
-}
 
 function bindEvents() {
   els.loginBtn.addEventListener("click", handleLoginClick);

@@ -11,19 +11,6 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="startupNoticeOverlay" class="startup-notice-overlay" role="dialog" aria-modal="true" aria-labelledby="startupNoticeTitle">
-    <div class="startup-notice-card">
-      <h2 id="startupNoticeTitle" class="h5 mb-3">Aviso de Atualização do Sistema</h2>
-      <p class="mb-3">Informamos que a Agenda de Auditórios passou por melhorias importantes:</p>
-      <ol class="mb-3 ps-3">
-        <li><strong>Visual Reformulado:</strong> Layout atualizado para otimizar o uso.</li>
-        <li><strong>Integração:</strong> Compartilhe agendamentos diretamente com o <strong>Google Agenda</strong>.</li>
-        <li><strong>Perfil Administrador:</strong> Permissão para gerenciar agendamentos de terceiros e agendamentos recorrentes. (<em>solicite mais informações junto ao Núcleo</em>).</li>
-      </ol>
-      <button id="startupNoticeOkBtn" type="button" class="btn btn-orange w-100">OK</button>
-    </div>
-  </div>
-
   <header class="site-header border-bottom">
     <div class="container py-4">
       <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
@@ -80,7 +67,7 @@
               <input type="text" class="form-control" id="nome" required>
             </div>
             <div class="col-lg-6">
-              <label for="email" class="form-label">E-mail Google</label>
+              <label for="email" class="form-label">E-mail</label>
               <input type="email" class="form-control" id="email" required readonly>
             </div>
             <div class="col-lg-6">
@@ -313,10 +300,8 @@
             <div id="feat2" class="accordion-collapse collapse" data-bs-parent="#featuresAccordion">
               <div class="accordion-body">
                 <ul class="mb-0">
-                  <li><strong>Login com Google (OAuth 2.0)</strong> — para usuário da SEVS.</li>
+                  <li><strong>Login com Google</strong> — Apenas contas google poderão realizar reservas.</li>
                   <li><strong>Login administrativo</strong> (usuário e senha) — para acesso à área de gestão.</li>
-                  <li>Logout com encerramento seguro da sessão.</li>
-                  <li>Sessão gerenciada via cookie assinado (HMAC) no servidor.</li>
                 </ul>
               </div>
             </div>
@@ -332,10 +317,9 @@
               <div class="accordion-body">
                 <ul class="mb-0">
                   <li>Criar <strong>reserva única</strong> informando: nome, e-mail, setor, telefone, descrição, data e horário (início e fim).</li>
-                  <li>Validação automática de <strong>conflito de horários</strong> — sobreposições são impedidas pelo servidor.</li>
-                  <li>Após a criação, geração automática de <strong>link para o Google Agenda</strong>.</li>
-                  <li>Botão para <strong>copiar os detalhes</strong> da reserva para a área de transferência.</li>
-                  <li>Exclusão da própria reserva (com confirmação).</li>
+                  <li>Validação automática, <strong>o sistema impede conflito de data ehorários</strong></li>
+                  <li>Botão para <strong>copiar os detalhes</strong> permite copiar os detalhes da reserva para que possa enviá-los a outras pessoas.</li>
+                  <li>O sistema permite que o usuário exclua sua própria reserva.</li>
                 </ul>
               </div>
             </div>
@@ -351,14 +335,14 @@
               <div class="accordion-body">
                 <ul class="mb-0">
                   <li>Criar <strong>reserva única</strong>.</li>
-                  <li>Criar <strong>reserva diária</strong> (repete todos os dias até a data final).</li>
-                  <li>Criar <strong>reserva semanal</strong> (com seleção dos dias da semana desejados).</li>
-                  <li>Criar <strong>reserva mensal</strong> (repete mensalmente até a data final).</li>
+                  <li>Criar <strong>reserva semanal</strong>.</li>
+                  <li>Criar <strong>reserva mensal</strong></li>
                   <li>Criar reservas <strong>em nome de terceiros</strong>.</li>
                   <li>Editar qualquer reserva (própria ou de outros usuários).</li>
                   <li>Excluir <strong>uma ocorrência</strong> de uma série recorrente.</li>
                   <li>Excluir a <strong>série inteira</strong> de uma reserva recorrente.</li>
                   <li>Todas as reservas do administrador continuam sujeitas às <strong>regras de conflito de horários</strong>.</li>
+                  <li>Caso seja necessário realizar uma reserva recorrente, contate o <strong>administrador.</strong></li>
                 </ul>
               </div>
             </div>
@@ -384,24 +368,6 @@
                   <li>Limpeza de todos os filtros com um clique.</li>
                   <li>Edição inline de qualquer reserva (nome, e-mail, setor, telefone, descrição, data, horário, status).</li>
                   <li>Exclusão de qualquer reserva com opção de remover ocorrência única ou série inteira.</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-
-          <div class="accordion-item">
-            <h3 class="accordion-header">
-              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#feat6">
-                🔒 Segurança e Autorização
-              </button>
-            </h3>
-            <div id="feat6" class="accordion-collapse collapse" data-bs-parent="#featuresAccordion">
-              <div class="accordion-body">
-                <ul class="mb-0">
-                  <li>Restrição de reservas recorrentes para usuário <strong>validada no servidor</strong> (não apenas no frontend).</li>
-                  <li>Regras de <strong>conflito de horários</strong> aplicadas no servidor para todos os perfis, incluindo o administrador.</li>
-                  <li>Autorização baseada em perfis: <strong>Visitante</strong> · <strong>Usuário</strong> · <strong>Administrador</strong>.</li>
-                  <li>Proteção contra manipulação de requisições (payload, parâmetros, JavaScript do navegador).</li>
                 </ul>
               </div>
             </div>
