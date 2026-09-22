@@ -339,10 +339,7 @@ function renderReservationDetails(reserva, container, isAdmin) {
     ["Setor", reserva.setor],
     ["Telefone", reserva.telefone],
     ["Data", formatDate(reserva.dataReserva)],
-    ["Horário", `${reserva.horaInicio} - ${reserva.horaFim}`],
-    ["Status", reserva.status],
-    ["Origem", "Manual"],
-    ["Recorrência", formatRecurrenceLabel(reserva)]
+    ["Horário", `${reserva.horaInicio} - ${reserva.horaFim}`]
   ];
 
   container.innerHTML = items
